@@ -7,39 +7,14 @@
   },
   "features": [
     {
-      "code": "hello",
-      "explain": "这是插件应用的第一个功能",
+      "code": "skills-manager",
+      "explain": "管理本机 skill 目录、查看 skill 列表，并支持删除和禁用",
       "cmds": [
-        "你好",
-        "hello"
-      ]
-    },
-    {
-      "code": "read",
-      "explain": "功能指令+匹配指令示例，使用 node.js 能力读文件",
-      "cmds": [
-        "读文件",
-        {
-          "type": "files",
-          "fileType": "file",
-          "maxLength": 1,
-          "label": "读文件"
-        }
-      ]
-    },
-    {
-      "code": "write",
-      "explain": "匹配指令示例，使用 node.js 能力写文件",
-      "mainHide": true,
-      "cmds": [
-        {
-          "type": "over",
-          "label": "保存为文件"
-        },
-        {
-          "type": "img",
-          "label": "保存为文件"
-        }
+        "skills",
+        "skill manager",
+        "skills manager",
+        "管理 skills",
+        "技能管理"
       ]
     }
   ]
