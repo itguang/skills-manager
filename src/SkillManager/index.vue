@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
 const props = defineProps({
   enterAction: {
@@ -14,7 +14,7 @@ const STORAGE_KEYS = {
   selectedDirectoryIds: 'skills-manager.selected-directory-ids'
 }
 
-const PAGE_SIZE = 10
+const PAGE_HEIGHT = 544
 
 const DEFAULT_DIRECTORY_CONFIGS = [
   {
@@ -55,6 +55,16 @@ const DEFAULT_DIRECTORY_CONFIGS = [
   }
 ]
 
+const DEFAULT_DIRECTORY_LABELS = new Map(DEFAULT_DIRECTORY_CONFIGS.map((item) => [item.id, item.label]))
+const DIRECTORY_FILTER_ORDER = [
+  'preset-opencode-global',
+  'preset-claude-global',
+  'preset-agents-global',
+  'preset-opencode-project',
+  'preset-claude-project',
+  'preset-agents-project'
+]
+
 function getStorageItem (key: string, fallbackValue: any) {
   try {
     const value = window.utools.dbStorage.getItem(key)
@@ -74,8 +84,8 @@ function mergeDirectoryConfigs (savedConfigs: any[]) {
   const defaultIds = new Set(DEFAULT_DIRECTORY_CONFIGS.map((item) => item.id))
 
   const mergedDefaults = DEFAULT_DIRECTORY_CONFIGS.map((item) => ({
-    ...item,
-    ...savedById.get(item.id)
+    ...savedById.get(item.id),
+    ...item
   }))
 
   const customItems = savedItems.filter((item) => !defaultIds.has(item.id))
@@ -83,19 +93,22 @@ function mergeDirectoryConfigs (savedConfigs: any[]) {
   return [...mergedDefaults, ...customItems]
 }
 
+const currentView = ref<'list' | 'settings'>('list')
 const projectRoot = ref('')
 const directoryConfigs = ref<any[]>([])
-const selectedDirectoryIds = ref<string[]>([])
 const scannedDirectories = ref<any[]>([])
 const skills = ref<any[]>([])
-const directorySearch = ref('')
 const skillKeyword = ref('')
 const statusFilter = ref('all')
-const currentPage = ref(1)
-const isLoading = ref(false)
+const selectedDirectoryIds = ref<string[]>([])
 const isDirectoryMenuOpen = ref(false)
+const isLoading = ref(false)
 const errorMessage = ref('')
-const dropdownRef = ref<HTMLElement | null>(null)
+const expandedSkillDescriptionIds = ref<string[]>([])
+const overflowingSkillDescriptionIds = ref<string[]>([])
+const skillDescriptionMeasureElements = new Map<string, HTMLElement>()
+const homeDirectory = ref('')
+const directoryFilterRef = ref<HTMLElement | null>(null)
 
 function persistSettings () {
   setStorageItem(STORAGE_KEYS.projectRoot, projectRoot.value)
@@ -103,26 +116,55 @@ function persistSettings () {
   setStorageItem(STORAGE_KEYS.selectedDirectoryIds, selectedDirectoryIds.value)
 }
 
-function ensureSelectedDirectories () {
-  const existingIds = new Set(directoryConfigs.value.map((item) => item.id))
-  const preservedIds = selectedDirectoryIds.value.filter((id) => existingIds.has(id))
-  selectedDirectoryIds.value = preservedIds.length > 0
-    ? preservedIds
-    : directoryConfigs.value.map((item) => item.id)
-}
-
 function loadSettings () {
   projectRoot.value = getStorageItem(STORAGE_KEYS.projectRoot, '')
   directoryConfigs.value = mergeDirectoryConfigs(getStorageItem(STORAGE_KEYS.directories, DEFAULT_DIRECTORY_CONFIGS))
-  selectedDirectoryIds.value = getStorageItem(
-    STORAGE_KEYS.selectedDirectoryIds,
-    directoryConfigs.value.map((item) => item.id)
-  )
-  ensureSelectedDirectories()
+  const savedSelectedDirectoryIds = getStorageItem(STORAGE_KEYS.selectedDirectoryIds, [])
+  const allDirectoryIds = directoryConfigs.value
+    .filter((directory) => directory.source === 'custom' || projectRoot.value.trim() || !String(directory.id).endsWith('project'))
+    .map((directory) => directory.id)
+
+  selectedDirectoryIds.value = Array.isArray(savedSelectedDirectoryIds) && savedSelectedDirectoryIds.length > 0
+    ? savedSelectedDirectoryIds.filter((id) => allDirectoryIds.includes(id))
+    : allDirectoryIds
 }
 
 function showNotification (message: string) {
   window.utools.showNotification(message)
+}
+
+function normalizePath (value: string) {
+  return value.replace(/\\/g, '/')
+}
+
+function compactDisplayPath (rawPath: string) {
+  const normalizedPath = normalizePath(rawPath || '')
+  const normalizedHome = normalizePath(homeDirectory.value || '')
+
+  if (normalizedHome && normalizedPath.startsWith(`${normalizedHome}/`)) {
+    return `~${normalizedPath.slice(normalizedHome.length)}`
+  }
+
+  if (normalizedHome && normalizedPath === normalizedHome) {
+    return '~'
+  }
+
+  return normalizedPath
+}
+
+function getSkillDisplayPath (skill: any) {
+  const directoryPath = typeof skill?.directoryPath === 'string' ? skill.directoryPath : ''
+  const skillDirPath = typeof skill?.skillDirPath === 'string' ? skill.skillDirPath : ''
+
+  if (directoryPath) {
+    return compactDisplayPath(directoryPath)
+  }
+
+  if (!skillDirPath) return ''
+
+  const normalizedSkillDirPath = normalizePath(skillDirPath)
+  const compactedPath = normalizedSkillDirPath.replace(/\/[^/]+$/, '')
+  return compactDisplayPath(compactedPath)
 }
 
 async function refreshSkills () {
@@ -137,24 +179,26 @@ async function refreshSkills () {
 
     scannedDirectories.value = result.directories
     skills.value = result.skills
-    ensureSelectedDirectories()
-    persistSettings()
   } catch (error: any) {
+    scannedDirectories.value = []
+    skills.value = []
     errorMessage.value = error?.message || '读取 skill 目录失败'
   } finally {
     isLoading.value = false
   }
 }
 
-function saveConfigAndRefresh () {
-  ensureSelectedDirectories()
-  persistSettings()
-  refreshSkills()
+function openSettings () {
+  currentView.value = 'settings'
+}
+
+async function closeSettings () {
+  currentView.value = 'list'
+  await refreshSkills()
 }
 
 function resetDefaultDirectories () {
   directoryConfigs.value = DEFAULT_DIRECTORY_CONFIGS.map((item) => ({ ...item }))
-  selectedDirectoryIds.value = directoryConfigs.value.map((item) => item.id)
   persistSettings()
   refreshSkills()
   showNotification('已恢复默认目录配置')
@@ -171,6 +215,17 @@ function browseProjectRoot () {
   projectRoot.value = directories[0]
 }
 
+function browseDirectoryConfig (directory: any) {
+  const directories = window.utools.showOpenDialog({
+    title: `选择 ${directory.label} 目录`,
+    properties: ['openDirectory']
+  })
+
+  if (!directories || directories.length === 0) return
+
+  directory.path = directories[0]
+}
+
 function addCustomDirectory () {
   const directories = window.utools.showOpenDialog({
     title: '选择要管理的 skill 目录',
@@ -180,629 +235,783 @@ function addCustomDirectory () {
   if (!directories || directories.length === 0) return
 
   const selectedPath = directories[0]
-  const nextConfig = {
-    id: `custom-${Date.now()}`,
-    label: selectedPath.split('/').filter(Boolean).at(-1) || '自定义目录',
-    path: selectedPath,
-    source: 'custom'
-  }
-
-  directoryConfigs.value = [...directoryConfigs.value, nextConfig]
-  selectedDirectoryIds.value = [...selectedDirectoryIds.value, nextConfig.id]
-  persistSettings()
-  refreshSkills()
+  directoryConfigs.value = [
+    ...directoryConfigs.value,
+    {
+      id: `custom-${Date.now()}`,
+      label: selectedPath.split('/').filter(Boolean).at(-1) || '自定义目录',
+      path: selectedPath,
+      source: 'custom'
+    }
+  ]
 }
 
 function removeDirectoryConfig (directoryId: string) {
   directoryConfigs.value = directoryConfigs.value.filter((item) => item.id !== directoryId)
-  selectedDirectoryIds.value = selectedDirectoryIds.value.filter((id) => id !== directoryId)
-  ensureSelectedDirectories()
-  persistSettings()
-  refreshSkills()
+}
+
+function getDirectoryScanState (directoryId: string) {
+  return scannedDirectories.value.find((item) => item.id === directoryId)
+}
+
+function getDirectoryDisplayLabel (directory: any) {
+  return DEFAULT_DIRECTORY_LABELS.get(directory.id) || directory.label || '自定义目录'
+}
+
+function getDirectoryStateText (directoryId: string) {
+  const state = getDirectoryScanState(directoryId)
+
+  if (!state) return '等待扫描'
+  if (state.reason === '未设置项目根目录') return ''
+  return state.reason || state.resolvedPath || '等待扫描'
+}
+
+function isDirectorySelected (directoryId: string) {
+  return selectedDirectoryIds.value.includes(directoryId)
 }
 
 function toggleDirectorySelection (directoryId: string) {
-  const selectedIds = new Set(selectedDirectoryIds.value)
-
-  if (selectedIds.has(directoryId)) {
-    selectedIds.delete(directoryId)
-  } else {
-    selectedIds.add(directoryId)
+  if (selectedDirectoryIds.value.includes(directoryId)) {
+    selectedDirectoryIds.value = selectedDirectoryIds.value.filter((id) => id !== directoryId)
+    return
   }
 
-  selectedDirectoryIds.value = [...selectedIds]
-  persistSettings()
+  selectedDirectoryIds.value = [...selectedDirectoryIds.value, directoryId]
 }
 
-function closeDirectoryMenuOnOutsideClick (event: MouseEvent) {
-  const dropdownElement = dropdownRef.value
+function toggleDirectoryMenu () {
+  isDirectoryMenuOpen.value = !isDirectoryMenuOpen.value
+}
+
+function handleDocumentPointerDown (event: Event) {
+  const dropdownElement = directoryFilterRef.value
   if (!dropdownElement) return
   if (dropdownElement.contains(event.target as Node)) return
   isDirectoryMenuOpen.value = false
 }
 
-async function toggleSkillDisabled (skill: any) {
-  try {
-    window.services.setSkillDisabled({
-      skillDirPath: skill.skillDirPath,
-      disabled: !skill.disabled
-    })
+function setSkillDescriptionMeasureRef (skillId: string) {
+  return (element: Element | null) => {
+    if (element instanceof HTMLElement) {
+      skillDescriptionMeasureElements.set(skillId, element)
+      return
+    }
 
-    await refreshSkills()
-    showNotification(skill.disabled ? `已启用 ${skill.name}` : `已禁用 ${skill.name}`)
-  } catch (error: any) {
-    showNotification(error?.message || '切换 skill 状态失败')
+    skillDescriptionMeasureElements.delete(skillId)
   }
 }
 
-async function deleteSkill (skill: any) {
-  const confirmed = window.confirm(`确认删除 skill "${skill.name}" 吗？这会删除整个 skill 目录。`)
-  if (!confirmed) return
+function syncSkillDescriptionOverflowState () {
+  if (currentView.value !== 'list') return
 
-  try {
-    window.services.removeSkill({
-      skillDirPath: skill.skillDirPath
+  const nextOverflowingIds = filteredSkills.value
+    .filter((skill) => {
+      const element = skillDescriptionMeasureElements.get(skill.id)
+      if (!element) return false
+
+      const lineHeight = Number.parseFloat(window.getComputedStyle(element).lineHeight) || 16.2
+      return element.scrollHeight > lineHeight * 2 + 1
     })
+    .map((skill) => skill.id)
 
-    await refreshSkills()
-    showNotification(`已删除 ${skill.name}`)
-  } catch (error: any) {
-    showNotification(error?.message || '删除 skill 失败')
-  }
+  overflowingSkillDescriptionIds.value = nextOverflowingIds
+  expandedSkillDescriptionIds.value = expandedSkillDescriptionIds.value.filter((id) => nextOverflowingIds.includes(id))
 }
 
-const selectedDirectoryText = computed(() => {
-  if (selectedDirectoryIds.value.length === 0) return '未选择目录'
-  if (selectedDirectoryIds.value.length === directoryConfigs.value.length) {
-    return `全部目录 (${directoryConfigs.value.length})`
+async function updateSkillDescriptionOverflowState () {
+  await nextTick()
+  syncSkillDescriptionOverflowState()
+}
+
+function isSkillDescriptionExpanded (skillId: string) {
+  return expandedSkillDescriptionIds.value.includes(skillId)
+}
+
+function shouldShowSkillDescriptionToggle (skillId: string) {
+  return overflowingSkillDescriptionIds.value.includes(skillId)
+}
+
+function toggleSkillDescriptionExpansion (skillId: string) {
+  if (expandedSkillDescriptionIds.value.includes(skillId)) {
+    expandedSkillDescriptionIds.value = expandedSkillDescriptionIds.value.filter((id) => id !== skillId)
+    return
   }
-  return `已选目录 (${selectedDirectoryIds.value.length})`
-})
 
-const visibleDirectoryOptions = computed(() => {
-  const keyword = directorySearch.value.trim().toLowerCase()
+  expandedSkillDescriptionIds.value = [...expandedSkillDescriptionIds.value, skillId]
+}
 
-  return scannedDirectories.value.filter((directory) => {
-    if (!keyword) return true
-    return `${directory.label} ${directory.path} ${directory.resolvedPath}`.toLowerCase().includes(keyword)
-  })
-})
+function handleWindowResize () {
+  updateSkillDescriptionOverflowState()
+}
 
 const filteredSkills = computed(() => {
   const keyword = skillKeyword.value.trim().toLowerCase()
   const selectedIds = new Set(selectedDirectoryIds.value)
 
   return skills.value.filter((skill) => {
+    if (directoryFilterOptions.value.length > 0 && selectedIds.size === 0) return false
     if (selectedIds.size > 0 && !selectedIds.has(skill.directoryId)) return false
     if (statusFilter.value === 'enabled' && skill.disabled) return false
     if (statusFilter.value === 'disabled' && !skill.disabled) return false
-    if (keyword && !skill.name.toLowerCase().includes(keyword)) return false
-    return true
+    if (!keyword) return true
+
+    return `${skill.name} ${skill.description} ${skill.directoryLabel}`.toLowerCase().includes(keyword)
   })
 })
 
-const totalPages = computed(() => {
-  const pages = Math.ceil(filteredSkills.value.length / PAGE_SIZE)
-  return pages > 0 ? pages : 1
+const healthyDirectoryCount = computed(() => scannedDirectories.value.filter((directory) => !directory.reason).length)
+const directoryFilterOptions = computed(() => {
+  const directoryById = new Map(directoryConfigs.value.map((directory) => [directory.id, directory]))
+  const availableDirectoryIds = new Set(
+    scannedDirectories.value
+      .filter((directory) => directory.exists && !directory.reason)
+      .map((directory) => directory.id)
+  )
+  const options = []
+
+  for (const directoryId of DIRECTORY_FILTER_ORDER) {
+    if (directoryId.endsWith('project') && !projectRoot.value.trim()) continue
+    if (!availableDirectoryIds.has(directoryId)) continue
+
+    const directory = directoryById.get(directoryId)
+    if (!directory) continue
+
+    options.push({
+      id: directory.id,
+      label: getDirectoryDisplayLabel(directory)
+    })
+  }
+
+  for (const directory of directoryConfigs.value) {
+    if (DIRECTORY_FILTER_ORDER.includes(directory.id)) continue
+    if (!availableDirectoryIds.has(directory.id)) continue
+
+    options.push({
+      id: directory.id,
+      label: getDirectoryDisplayLabel(directory)
+    })
+  }
+
+  return options
+})
+const selectedDirectoryText = computed(() => {
+  if (directoryFilterOptions.value.length === 0) return '全部目录'
+  if (selectedDirectoryIds.value.length === directoryFilterOptions.value.length) {
+    return `全部目录 (${directoryFilterOptions.value.length})`
+  }
+  if (selectedDirectoryIds.value.length === 0) return '未选目录'
+  return `已选目录 (${selectedDirectoryIds.value.length})`
+})
+const directorySections = computed(() => {
+  const globalItems = []
+  const projectItems = []
+  const customItems = []
+
+  for (const directory of directoryConfigs.value) {
+    if (directory.source === 'custom') {
+      customItems.push(directory)
+      continue
+    }
+
+    if (typeof directory.id === 'string' && directory.id.endsWith('global')) {
+      globalItems.push(directory)
+      continue
+    }
+
+    if (typeof directory.id === 'string' && directory.id.endsWith('project')) {
+      projectItems.push(directory)
+      continue
+    }
+
+    customItems.push(directory)
+  }
+
+  return [
+    { key: 'global', title: '全局路径配置', items: globalItems },
+    { key: 'project', title: '项目路径配置', items: projectItems },
+    { key: 'custom', title: '自定义路径配置', items: customItems }
+  ].filter((section) => section.items.length > 0)
 })
 
-const pagedSkills = computed(() => {
-  const start = (currentPage.value - 1) * PAGE_SIZE
-  return filteredSkills.value.slice(start, start + PAGE_SIZE)
-})
+watch([projectRoot, directoryConfigs, selectedDirectoryIds], () => {
+  persistSettings()
+}, { deep: true })
 
-const enabledSkillCount = computed(() => skills.value.filter((skill) => !skill.disabled).length)
-const disabledSkillCount = computed(() => skills.value.filter((skill) => skill.disabled).length)
+watch(() => directoryFilterOptions.value.map((directory) => directory.id), (directoryIds) => {
+  const validSelectedIds = selectedDirectoryIds.value.filter((id) => directoryIds.includes(id))
 
-watch(() => props.enterAction, () => {
-  window.utools.setExpendHeight(720)
+  if (validSelectedIds.length !== selectedDirectoryIds.value.length) {
+    selectedDirectoryIds.value = validSelectedIds
+  }
 }, { immediate: true })
 
-watch([skillKeyword, statusFilter, selectedDirectoryIds], () => {
-  currentPage.value = 1
-})
+watch(currentView, () => {
+  window.utools.setExpendHeight(PAGE_HEIGHT)
+}, { immediate: true })
 
-watch(filteredSkills, () => {
-  if (currentPage.value > totalPages.value) {
-    currentPage.value = totalPages.value
+watch([filteredSkills, currentView, isLoading], () => {
+  if (isLoading.value || currentView.value !== 'list') return
+  updateSkillDescriptionOverflowState()
+}, { flush: 'post' })
+
+watch(() => props.enterAction, () => {
+  currentView.value = 'list'
+  window.utools.setExpendHeight(PAGE_HEIGHT)
+
+  if (directoryConfigs.value.length > 0) {
+    refreshSkills()
   }
-})
+}, { immediate: true })
 
 onMounted(() => {
-  document.addEventListener('click', closeDirectoryMenuOnOutsideClick)
+  try {
+    homeDirectory.value = window.utools.getPath('home') || ''
+  } catch (error) {
+    homeDirectory.value = ''
+  }
+
   loadSettings()
   refreshSkills()
+  window.addEventListener('resize', handleWindowResize)
+  document.addEventListener('pointerdown', handleDocumentPointerDown)
 })
 
 onBeforeUnmount(() => {
-  document.removeEventListener('click', closeDirectoryMenuOnOutsideClick)
+  window.removeEventListener('resize', handleWindowResize)
+  document.removeEventListener('pointerdown', handleDocumentPointerDown)
 })
 </script>
 
 <template>
   <div class="skill-manager">
-    <section class="hero">
-      <div class="hero-copy">
-        <p class="eyebrow">Local Skill Registry</p>
-        <h1>Skills Manager</h1>
-        <p class="hero-text">
-          统一管理当前机器上的 skill 目录。支持目录配置、多选查看、关键词检索、分页，以及删除与禁用。
-        </p>
-      </div>
-      <div class="hero-stats">
-        <article class="stat-card">
-          <span class="stat-label">总技能数</span>
-          <strong class="stat-value">{{ skills.length }}</strong>
-        </article>
-        <article class="stat-card">
-          <span class="stat-label">已启用</span>
-          <strong class="stat-value">{{ enabledSkillCount }}</strong>
-        </article>
-        <article class="stat-card">
-          <span class="stat-label">已禁用</span>
-          <strong class="stat-value">{{ disabledSkillCount }}</strong>
-        </article>
-      </div>
-    </section>
-
-    <section class="panel">
-      <div class="panel-header">
-        <div>
-          <h2>目录配置</h2>
-          <p>默认预置 OpenCode、Claude 兼容和 Agents 兼容目录，也支持继续添加自定义目录。</p>
-        </div>
-        <div class="panel-actions">
-          <button class="button ghost" type="button" @click="addCustomDirectory">添加自定义目录</button>
-          <button class="button ghost" type="button" @click="resetDefaultDirectories">重置默认目录</button>
-          <button class="button primary" type="button" @click="saveConfigAndRefresh" :disabled="isLoading">
-            保存并刷新
-          </button>
-        </div>
-      </div>
-
-      <div class="project-root-row">
-        <label class="field">
-          <span class="field-label">项目根目录</span>
-          <input v-model="projectRoot" type="text" placeholder="为项目级目录配置一个根路径，例如 /Users/name/project" />
-        </label>
-        <button class="button secondary" type="button" @click="browseProjectRoot">选择目录</button>
-      </div>
-
-      <div class="directory-configs">
-        <article v-for="directory in directoryConfigs" :key="directory.id" class="directory-card">
-          <label class="field">
-            <span class="field-label">目录名称</span>
-            <input v-model="directory.label" type="text" placeholder="目录名称" />
+    <Transition name="view-switch" mode="out-in">
+      <section v-if="currentView === 'list'" key="list" class="page-shell">
+        <section class="toolbar-card">
+          <label class="search-field">
+            <input v-model="skillKeyword" type="text" placeholder="搜索 skill 名称、描述或来源目录" />
           </label>
-          <label class="field path-field">
-            <span class="field-label">目录路径</span>
-            <input v-model="directory.path" type="text" placeholder="支持 ~ 和 ${projectRoot}" />
-          </label>
-          <button
-            v-if="directory.source === 'custom'"
-            class="icon-button"
-            type="button"
-            @click="removeDirectoryConfig(directory.id)"
-          >
-            删除
-          </button>
-        </article>
-      </div>
-    </section>
 
-    <section class="panel">
-      <div class="panel-header">
-        <div>
-          <h2>筛选与检索</h2>
-          <p>目录可多选，列表只显示 skill name 和 description，并保留禁用状态筛选。</p>
-        </div>
-        <button class="button secondary" type="button" @click="refreshSkills" :disabled="isLoading">
-          {{ isLoading ? '刷新中...' : '刷新列表' }}
-        </button>
-      </div>
+          <div ref="directoryFilterRef" class="directory-filter">
+            <button class="directory-filter-trigger" type="button" @click="toggleDirectoryMenu">
+              <span>{{ selectedDirectoryText }}</span>
+              <span class="directory-filter-caret" aria-hidden="true">
+                <svg viewBox="0 0 16 16">
+                  <path d="M4.47 6.97a.75.75 0 0 1 1.06 0L8 9.44l2.47-2.47a.75.75 0 1 1 1.06 1.06l-3 3a.75.75 0 0 1-1.06 0l-3-3a.75.75 0 0 1 0-1.06Z" fill="currentColor" />
+                </svg>
+              </span>
+            </button>
 
-      <div class="filters">
-        <div class="directory-picker" ref="dropdownRef">
-          <button class="picker-trigger" type="button" @click.stop="isDirectoryMenuOpen = !isDirectoryMenuOpen">
-            <span>{{ selectedDirectoryText }}</span>
-            <span class="picker-caret">{{ isDirectoryMenuOpen ? '▲' : '▼' }}</span>
-          </button>
-
-          <div v-if="isDirectoryMenuOpen" class="picker-dropdown">
-            <input v-model="directorySearch" type="text" placeholder="搜索目录名称或路径" />
-            <div class="picker-options">
-              <label v-for="directory in visibleDirectoryOptions" :key="directory.id" class="picker-option">
+            <div v-if="isDirectoryMenuOpen" class="directory-filter-menu">
+              <label
+                v-for="directory in directoryFilterOptions"
+                :key="directory.id"
+                class="directory-filter-option"
+              >
                 <input
-                  :checked="selectedDirectoryIds.includes(directory.id)"
+                  :checked="isDirectorySelected(directory.id)"
                   type="checkbox"
                   @change="toggleDirectorySelection(directory.id)"
                 />
-                <div class="picker-content">
-                  <div class="picker-topline">
-                    <strong>{{ directory.label }}</strong>
-                    <span>{{ directory.totalSkills }} 个</span>
-                  </div>
-                  <div class="picker-path">{{ directory.resolvedPath || directory.path }}</div>
-                  <div v-if="directory.reason" class="picker-note">{{ directory.reason }}</div>
-                </div>
+                <span>{{ directory.label }}</span>
               </label>
             </div>
           </div>
-        </div>
 
-        <label class="field">
-          <span class="field-label">Skill Name 检索</span>
-          <input v-model="skillKeyword" type="text" placeholder="按 skill name 关键字过滤" />
-        </label>
+          <label class="status-field">
+            <div class="status-select-wrap">
+              <select v-model="statusFilter">
+                <option value="all">全部状态</option>
+                <option value="enabled">仅启用</option>
+                <option value="disabled">仅禁用</option>
+              </select>
+              <span class="status-select-caret" aria-hidden="true">
+                <svg viewBox="0 0 16 16">
+                  <path d="M4.47 6.97a.75.75 0 0 1 1.06 0L8 9.44l2.47-2.47a.75.75 0 1 1 1.06 1.06l-3 3a.75.75 0 0 1-1.06 0l-3-3a.75.75 0 0 1 0-1.06Z" fill="currentColor" />
+                </svg>
+              </span>
+            </div>
+          </label>
 
-        <label class="field status-field">
-          <span class="field-label">状态</span>
-          <select v-model="statusFilter">
-            <option value="all">全部</option>
-            <option value="enabled">仅启用</option>
-            <option value="disabled">仅禁用</option>
-          </select>
-        </label>
-      </div>
+          <button class="button secondary" type="button" @click="refreshSkills" :disabled="isLoading">
+            {{ isLoading ? '查询中...' : '查询' }}
+          </button>
+        </section>
 
-      <div class="summary-bar">
-        <span>已选目录 {{ selectedDirectoryIds.length }} 个</span>
-        <span>筛选结果 {{ filteredSkills.length }} 个</span>
-        <span>共 {{ skills.length }} 个 skill</span>
-      </div>
+        <p v-if="errorMessage" class="error-message">{{ errorMessage }}</p>
 
-      <p v-if="errorMessage" class="error-message">{{ errorMessage }}</p>
-    </section>
-
-    <section class="list-section">
-      <article v-for="skill in pagedSkills" :key="skill.id" :class="['skill-card', { disabled: skill.disabled }]">
-        <div class="skill-header">
-          <div>
-            <h3>{{ skill.name }}</h3>
-            <p class="skill-description">{{ skill.description }}</p>
+        <section class="list-card">
+          <div class="list-meta">
+            <span>已连接目录 {{ healthyDirectoryCount }}/{{ scannedDirectories.length }}</span>
+            <span>列表结果 {{ filteredSkills.length }}</span>
           </div>
-          <span :class="['status-badge', skill.disabled ? 'disabled' : 'enabled']">
-            {{ skill.disabled ? '已禁用' : '已启用' }}
-          </span>
-        </div>
 
-        <div class="skill-footer">
-          <span class="skill-location">{{ skill.directoryLabel }}</span>
-          <div class="skill-actions">
-            <button class="button ghost" type="button" @click="toggleSkillDisabled(skill)">
-              {{ skill.disabled ? '启用' : '禁用' }}
-            </button>
-            <button class="button danger" type="button" @click="deleteSkill(skill)">删除</button>
+          <div v-if="!isLoading && filteredSkills.length === 0" class="empty-state">
+            <h3>没有可展示的 skill</h3>
+            <p>检查设置页里的目录配置，或调整当前筛选条件后再刷新。</p>
           </div>
-        </div>
-      </article>
 
-      <div v-if="!isLoading && pagedSkills.length === 0" class="empty-state">
-        <h3>没有匹配的 skill</h3>
-        <p>检查目录配置、项目根目录或筛选条件后再刷新列表。</p>
-      </div>
-    </section>
+          <div v-else>
+            <article
+              v-for="skill in filteredSkills"
+              :key="skill.id"
+              :class="['skill-row', { disabled: skill.disabled }]"
+            >
+              <div class="skill-row-top">
+                <div class="skill-copy">
+                  <h3>{{ skill.name }}</h3>
+                  <span class="skill-path">{{ getSkillDisplayPath(skill) }}</span>
+                </div>
 
-    <section class="pagination-bar">
-      <div>第 {{ currentPage }} / {{ totalPages }} 页</div>
-      <div class="pagination-actions">
-        <button class="button ghost" type="button" :disabled="currentPage === 1" @click="currentPage -= 1">上一页</button>
-        <button class="button ghost" type="button" :disabled="currentPage === totalPages" @click="currentPage += 1">下一页</button>
-      </div>
-    </section>
+                <span :class="['status-badge', skill.disabled ? 'disabled' : 'enabled']">
+                  {{ skill.disabled ? '已禁用' : '已启用' }}
+                </span>
+              </div>
+
+              <div class="skill-row-bottom">
+                <div :class="['skill-description-box', { expanded: isSkillDescriptionExpanded(skill.id) }]">
+                  <span :ref="setSkillDescriptionMeasureRef(skill.id)" class="skill-description skill-description--measure">
+                    {{ skill.description }}
+                  </span>
+                  <p :class="['skill-description', { expanded: isSkillDescriptionExpanded(skill.id) }]">{{ skill.description }}</p>
+                </div>
+                <button
+                  v-if="shouldShowSkillDescriptionToggle(skill.id)"
+                  class="skill-description-toggle"
+                  type="button"
+                  @click="toggleSkillDescriptionExpansion(skill.id)"
+                >
+                  {{ isSkillDescriptionExpanded(skill.id) ? '收起' : '查看更多' }}
+                </button>
+              </div>
+            </article>
+          </div>
+        </section>
+
+        <button class="settings-fab" type="button" @click="openSettings" aria-label="打开设置" title="设置">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path
+              d="M19.14 12.94c.04-.31.06-.62.06-.94s-.02-.63-.06-.94l2.03-1.58a.5.5 0 0 0 .12-.64l-1.92-3.32a.5.5 0 0 0-.6-.22l-2.39.96a7.14 7.14 0 0 0-1.63-.94l-.36-2.54a.5.5 0 0 0-.49-.42h-3.84a.5.5 0 0 0-.49.42l-.36 2.54c-.58.22-1.13.53-1.63.94l-2.39-.96a.5.5 0 0 0-.6.22L2.7 8.84a.5.5 0 0 0 .12.64l2.03 1.58c-.04.31-.06.62-.06.94s.02.63.06.94L2.82 14.52a.5.5 0 0 0-.12.64l1.92 3.32a.5.5 0 0 0 .6.22l2.39-.96c.5.41 1.05.72 1.63.94l.36 2.54a.5.5 0 0 0 .49.42h3.84a.5.5 0 0 0 .49-.42l.36-2.54c.58-.22 1.13-.53 1.63-.94l2.39.96a.5.5 0 0 0 .6-.22l1.92-3.32a.5.5 0 0 0-.12-.64zm-7.14 2.56A3.5 3.5 0 1 1 12 8.5a3.5 3.5 0 0 1 0 7z"
+              fill="currentColor"
+            />
+          </svg>
+        </button>
+      </section>
+
+      <section v-else key="settings" class="page-shell">
+        <header class="settings-header">
+          <div class="settings-title-row">
+            <h2>目录配置</h2>
+            <p class="settings-note">修改会自动保存，返回列表时会重新扫描。</p>
+          </div>
+
+          <button class="button secondary compact" type="button" @click="refreshSkills" :disabled="isLoading">
+            {{ isLoading ? '扫描中...' : '立即扫描' }}
+          </button>
+        </header>
+
+        <section class="settings-card">
+          <div class="settings-actions">
+            <button class="button ghost compact" type="button" @click="addCustomDirectory">添加目录</button>
+            <button class="button ghost compact" type="button" @click="resetDefaultDirectories">重置默认</button>
+          </div>
+
+          <div class="directory-groups">
+            <section v-for="section in directorySections" :key="section.key" class="directory-module">
+              <header class="directory-module-header">
+                <h3>{{ section.title }}</h3>
+              </header>
+
+              <div class="directory-list">
+                <article v-for="directory in section.items" :key="directory.id" class="directory-item">
+                  <div class="directory-row">
+                    <span class="directory-name">{{ getDirectoryDisplayLabel(directory) }}</span>
+                    <input
+                      v-model="directory.path"
+                      class="directory-path-input"
+                      type="text"
+                      placeholder="支持 ~ 和 ${projectRoot}"
+                    />
+                    <span class="directory-count">
+                      {{ getDirectoryScanState(directory.id)?.totalSkills || 0 }} 个 skill
+                    </span>
+                    <button class="button ghost compact" type="button" @click="browseDirectoryConfig(directory)">选择</button>
+                    <div class="directory-side">
+                      <button
+                        v-if="directory.source === 'custom'"
+                        class="button danger compact"
+                        type="button"
+                        @click="removeDirectoryConfig(directory.id)"
+                      >
+                        删除
+                      </button>
+                    </div>
+                  </div>
+
+                  <div class="directory-foot">
+                    <span class="directory-state">{{ getDirectoryStateText(directory.id) }}</span>
+                  </div>
+                </article>
+              </div>
+
+              <div v-if="section.key === 'project'" class="project-root-row">
+                <span class="directory-name">项目根目录</span>
+                <input
+                  v-model="projectRoot"
+                  class="directory-path-input"
+                  type="text"
+                  placeholder="用于解析 ${projectRoot} 占位符"
+                />
+                <button class="button secondary compact" type="button" @click="browseProjectRoot">选择</button>
+              </div>
+            </section>
+          </div>
+        </section>
+
+        <button class="settings-back-fab" type="button" @click="closeSettings" aria-label="返回列表" title="返回列表">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path
+              d="M14.78 5.22a.75.75 0 0 1 0 1.06L9.06 12l5.72 5.72a.75.75 0 1 1-1.06 1.06l-6.25-6.25a.75.75 0 0 1 0-1.06l6.25-6.25a.75.75 0 0 1 1.06 0Z"
+              fill="currentColor"
+            />
+          </svg>
+        </button>
+      </section>
+    </Transition>
   </div>
 </template>
 
 <style scoped>
 .skill-manager {
-  min-height: 100vh;
-  padding: 28px;
+  height: 100%;
+  padding: 12px;
   color: var(--text);
 }
 
-.hero {
-  display: grid;
-  grid-template-columns: minmax(0, 1.4fr) minmax(280px, 0.9fr);
-  gap: 18px;
-  align-items: stretch;
-  margin-bottom: 18px;
+.page-shell {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  height: 100%;
+  min-height: 0;
 }
 
-.hero-copy,
-.hero-stats,
-.panel,
-.list-section,
-.pagination-bar {
+.toolbar-card,
+.list-card,
+.settings-header,
+.settings-card {
   border: 1px solid var(--border);
-  border-radius: 24px;
+  border-radius: 20px;
   background: var(--surface);
   backdrop-filter: blur(18px);
   box-shadow: var(--shadow);
 }
 
-.hero-copy {
-  padding: 28px;
+.directory-row,
+.skill-row-top,
+.skill-row-bottom,
+.field-inline,
+.settings-actions,
+.list-meta,
+.settings-header {
+  display: flex;
+  gap: 10px;
+  align-items: center;
 }
 
-.eyebrow {
-  margin: 0 0 10px;
-  color: var(--brand);
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-}
-
-.hero-copy h1,
-.panel-header h2,
-.empty-state h3 {
+.settings-header h2,
+.empty-state h3,
+.skill-copy h3 {
   margin: 0;
   font-family: "Avenir Next", "IBM Plex Sans", sans-serif;
   letter-spacing: -0.03em;
 }
 
-.hero-copy h1 {
-  font-size: 38px;
-}
-
-.hero-text,
-.panel-header p,
-.picker-path,
-.picker-note,
-.summary-bar,
+.list-meta,
 .skill-description,
-.skill-location,
+.skill-path,
+.directory-state,
+.directory-count,
 .empty-state p {
   color: var(--text-soft);
 }
 
-.hero-text {
-  margin: 12px 0 0;
-  max-width: 720px;
-  line-height: 1.6;
+.toolbar-card,
+.settings-card {
+  padding: 10px;
 }
 
-.hero-stats {
+.toolbar-card {
+  position: relative;
+  z-index: 5;
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
-  padding: 16px;
-}
-
-.stat-card {
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  min-height: 112px;
-  padding: 18px;
-  border-radius: 20px;
-  background: var(--surface-strong);
-}
-
-.stat-label {
-  color: var(--text-soft);
-  font-size: 13px;
-}
-
-.stat-value {
-  font-size: 34px;
-  line-height: 1;
-}
-
-.panel,
-.pagination-bar {
-  margin-bottom: 18px;
-  padding: 20px;
-}
-
-.panel-header {
-  display: flex;
-  justify-content: space-between;
-  gap: 18px;
-  align-items: flex-start;
-  margin-bottom: 18px;
-}
-
-.panel-header p {
-  margin: 6px 0 0;
-  line-height: 1.5;
-}
-
-.panel-actions,
-.project-root-row,
-.filters,
-.summary-bar,
-.skill-footer,
-.pagination-actions {
-  display: flex;
-  gap: 12px;
+  grid-template-columns: minmax(0, 1fr) max-content 108px 72px;
+  gap: 8px;
   align-items: center;
+  overflow: visible;
 }
 
-.panel-actions {
-  flex-wrap: wrap;
-  justify-content: flex-end;
+.search-field,
+.directory-filter,
+.status-field,
+.field {
+  min-width: 0;
 }
 
-.project-root-row {
-  margin-bottom: 18px;
+.directory-filter {
+  position: relative;
+  justify-self: start;
+}
+
+.directory-filter-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: fit-content;
+  min-width: 0;
+  min-height: 36px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface-strong);
+  color: var(--text);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.status-select-wrap {
+  position: relative;
+}
+
+.status-field select {
+  width: 100%;
+  min-height: 36px;
+  padding: 0 32px 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface-strong);
+  color: var(--text);
+  appearance: none;
+}
+
+.directory-filter-caret {
+  display: inline-flex;
+  flex-shrink: 0;
+  color: var(--text-soft);
+}
+
+.directory-filter-caret svg,
+.status-select-caret svg {
+  width: 14px;
+  height: 14px;
+}
+
+.status-select-caret {
+  position: absolute;
+  top: 50%;
+  right: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-soft);
+  pointer-events: none;
+  transform: translateY(-50%);
+}
+
+.directory-filter-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 50;
+  display: grid;
+  gap: 6px;
+  width: max-content;
+  min-width: max-content;
+  max-width: none;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.directory-filter-action {
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--brand);
+  font-size: 12px;
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+}
+
+.directory-filter-option {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px;
+  align-items: start;
+  min-width: 0;
+  font-size: 12px;
+}
+
+.directory-filter-option input {
+  margin: 1px 0 0;
+}
+
+.directory-filter-option span {
+  line-height: 1.35;
+  white-space: nowrap;
+  word-break: normal;
 }
 
 .field {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  flex: 1;
+  gap: 6px;
 }
 
 .field-label {
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
 }
 
-.directory-configs {
-  display: grid;
-  gap: 12px;
-}
-
-.directory-card {
-  display: grid;
-  grid-template-columns: minmax(180px, 240px) minmax(0, 1fr) auto;
-  gap: 12px;
-  align-items: end;
-  padding: 14px;
-  border-radius: 18px;
-  background: var(--surface-strong);
-}
-
-.path-field {
-  min-width: 0;
-}
-
-.filters {
-  align-items: end;
-}
-
-.directory-picker {
-  position: relative;
-  width: min(360px, 100%);
-}
-
-.picker-trigger {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  width: 100%;
-  min-height: 50px;
-  padding: 0 16px;
-  border-radius: 14px;
-  background: var(--surface-strong);
-  color: var(--text);
-  cursor: pointer;
-}
-
-.picker-caret {
-  color: var(--text-soft);
-  font-size: 12px;
-}
-
-.picker-dropdown {
-  position: absolute;
-  top: calc(100% + 10px);
-  left: 0;
-  z-index: 10;
-  width: 100%;
-  padding: 14px;
-  border: 1px solid var(--border);
-  border-radius: 20px;
-  background: var(--surface-strong);
-  box-shadow: var(--shadow);
-}
-
-.picker-options {
-  display: grid;
-  gap: 10px;
-  max-height: 260px;
-  margin-top: 12px;
+.list-card,
+.settings-card {
+  flex: 1;
+  min-height: 0;
   overflow: auto;
 }
 
-.picker-option {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: 10px;
-  align-items: start;
-  padding: 10px 12px;
+.list-card {
+  padding: 10px;
+}
+
+.list-meta {
+  justify-content: space-between;
+  margin-bottom: 8px;
+  padding: 0 4px;
+  font-size: 12px;
+}
+
+.skill-row {
+  padding: 8px 10px;
   border-radius: 16px;
-  background: var(--surface-muted);
+  background: var(--surface-strong);
 }
 
-.picker-option input {
-  width: 16px;
-  height: 16px;
-  margin-top: 4px;
+.skill-row + .skill-row {
+  margin-top: 6px;
 }
 
-.picker-content {
+.skill-row.disabled {
+  opacity: 0.78;
+}
+
+.skill-row-top {
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.skill-copy {
+  display: grid;
+  grid-template-columns: minmax(0, max-content) minmax(0, 1fr);
+  gap: 8px;
+  align-items: baseline;
+  flex: 1;
   min-width: 0;
 }
 
-.picker-topline {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.picker-path,
-.picker-note {
-  margin-top: 4px;
-  font-size: 12px;
-  word-break: break-all;
-}
-
-.status-field {
-  max-width: 180px;
-}
-
-.summary-bar {
-  flex-wrap: wrap;
-  padding: 14px 16px;
-  margin-top: 16px;
-  border-radius: 18px;
-  background: var(--surface-muted);
-}
-
-.error-message {
-  margin: 16px 0 0;
-  color: var(--danger);
-}
-
-.list-section {
-  display: grid;
-  gap: 14px;
-  padding: 20px;
-}
-
-.skill-card {
-  padding: 18px;
-  border-radius: 20px;
-  background: var(--surface-strong);
-  transition: transform 0.16s ease, border-color 0.16s ease;
-}
-
-.skill-card.disabled {
-  opacity: 0.82;
-}
-
-.skill-card:hover {
-  transform: translateY(-1px);
-}
-
-.skill-header {
-  display: flex;
-  justify-content: space-between;
-  gap: 16px;
-}
-
-.skill-header h3 {
-  margin: 0;
-  font-size: 20px;
+.skill-copy h3 {
+  min-width: 0;
+  font-size: 16px;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .skill-description {
-  margin: 10px 0 0;
-  line-height: 1.6;
+  min-width: 0;
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.35;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  white-space: normal;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.skill-row-bottom {
+  justify-content: flex-start;
+  align-items: flex-start;
+  gap: 6px;
+  margin-top: 4px;
+  font-size: 12px;
 }
 
 .status-badge {
-  flex-shrink: 0;
-  align-self: flex-start;
-  padding: 7px 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 8px;
   border-radius: 999px;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
 }
 
+.skill-path {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: left;
+}
+
+.skill-description-box {
+  position: relative;
+  flex: 0 1 70%;
+  min-width: 0;
+  max-width: 70%;
+}
+
+.skill-description.expanded {
+  display: block;
+  overflow: visible;
+  text-overflow: clip;
+  -webkit-line-clamp: unset;
+  word-break: break-all;
+}
+
+.skill-description--measure {
+  position: absolute;
+  inset: 0;
+  display: block;
+  visibility: hidden;
+  pointer-events: none;
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+  word-break: break-all;
+}
+
+.skill-description-toggle {
+  flex-shrink: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--brand);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.2;
+  cursor: pointer;
+}
+
+.status-badge.enabled,
 .status-badge.enabled {
   background: rgba(15, 118, 110, 0.12);
   color: var(--brand);
@@ -813,66 +1022,180 @@ onBeforeUnmount(() => {
   color: var(--danger);
 }
 
-.skill-footer {
+.settings-header {
   justify-content: space-between;
-  margin-top: 16px;
+  align-items: center;
+  padding: 12px 14px;
 }
 
-.skill-location {
-  font-size: 13px;
-}
-
-.skill-actions {
+.settings-title-row {
   display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+}
+
+.settings-header h2 {
+  font-size: 20px;
+}
+
+.settings-note {
+  min-width: 0;
+  margin: 0;
+  color: var(--text-soft);
+  font-size: 12px;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.settings-actions {
+  justify-content: flex-end;
+  margin-bottom: 10px;
+}
+
+.directory-groups {
+  display: grid;
+  gap: 14px;
+}
+
+.directory-module {
+  display: grid;
+  gap: 8px;
+}
+
+.directory-module-header {
+  display: flex;
+  align-items: center;
+}
+
+.directory-module-header h3 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.directory-list {
+  display: grid;
   gap: 10px;
 }
 
+.directory-item {
+  padding: 10px;
+  border-radius: 16px;
+  background: var(--surface-strong);
+}
+
+.directory-row {
+  gap: 8px;
+  align-items: center;
+  flex-wrap: nowrap;
+  margin-bottom: 8px;
+}
+
+.project-root-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: nowrap;
+  padding: 10px;
+  border-radius: 16px;
+  background: var(--surface-strong);
+}
+
+.directory-name {
+  flex-shrink: 0;
+  min-width: 108px;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.directory-path-input {
+  flex: 0 1 320px;
+  min-width: 0;
+  max-width: 360px;
+}
+
+.directory-side {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.directory-foot {
+  display: flex;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.directory-state {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.directory-count {
+  flex-shrink: 0;
+  color: var(--text-soft);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
 .empty-state {
-  padding: 32px 20px;
+  display: grid;
+  place-items: center;
+  min-height: 180px;
+  padding: 24px 16px;
   text-align: center;
 }
 
-.pagination-bar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
+.empty-state p {
+  margin: 8px 0 0;
+  font-size: 13px;
 }
 
-.button,
-.icon-button {
+.error-message {
+  margin: 0;
+  padding: 0 4px;
+  color: var(--danger);
+  font-size: 12px;
+}
+
+.button {
   display: inline-flex;
-  justify-content: center;
   align-items: center;
-  min-height: 42px;
-  padding: 0 16px;
+  justify-content: center;
+  min-height: 36px;
+  padding: 0 14px;
   border-radius: 999px;
   cursor: pointer;
   transition: transform 0.16s ease, opacity 0.16s ease, background-color 0.16s ease;
 }
 
-.button:disabled,
-.icon-button:disabled {
+.button.compact {
+  min-height: 32px;
+  padding: 0 12px;
+  font-size: 12px;
+}
+
+.button:disabled {
   opacity: 0.45;
   cursor: not-allowed;
 }
 
-.button:not(:disabled):hover,
-.icon-button:not(:disabled):hover {
+.button:not(:disabled):hover {
   transform: translateY(-1px);
 }
 
-.button.primary {
-  background: var(--brand);
-  color: #f5fffd;
-}
-
 .button.secondary {
-  background: rgba(15, 118, 110, 0.1);
+  background: rgba(15, 118, 110, 0.12);
   color: var(--brand);
 }
 
-.button.ghost,
-.icon-button {
+.button.ghost {
   background: var(--surface-muted);
   color: var(--text);
 }
@@ -882,48 +1205,89 @@ onBeforeUnmount(() => {
   color: var(--danger);
 }
 
-@media (max-width: 960px) {
-  .skill-manager {
-    padding: 18px;
-  }
+.settings-fab {
+  position: absolute;
+  right: 2px;
+  bottom: 2px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border-radius: 999px;
+  background: rgba(15, 118, 110, 0.08);
+  color: var(--brand);
+  box-shadow: 0 8px 18px rgba(15, 118, 110, 0.12);
+  cursor: pointer;
+}
 
-  .hero,
-  .directory-card,
-  .filters,
-  .panel-header,
-  .project-root-row,
-  .skill-footer,
-  .pagination-bar {
+.settings-fab svg {
+  width: 16px;
+  height: 16px;
+}
+
+.settings-fab:hover {
+  transform: translateY(-1px);
+}
+
+.settings-back-fab {
+  position: absolute;
+  right: 2px;
+  bottom: 2px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border-radius: 999px;
+  background: rgba(15, 118, 110, 0.08);
+  color: var(--brand);
+  box-shadow: 0 8px 18px rgba(15, 118, 110, 0.12);
+  cursor: pointer;
+}
+
+.settings-back-fab svg {
+  width: 16px;
+  height: 16px;
+}
+
+.settings-back-fab:hover {
+  transform: translateY(-1px);
+}
+
+.view-switch-enter-active,
+.view-switch-leave-active {
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+
+.view-switch-enter-from,
+.view-switch-leave-to {
+  opacity: 0;
+  transform: translateY(6px);
+}
+
+@media (max-width: 860px) {
+  .field-inline,
+  .directory-foot {
     grid-template-columns: 1fr;
     flex-direction: column;
     align-items: stretch;
   }
 
-  .hero-stats {
-    grid-template-columns: 1fr;
+  .settings-actions {
+    justify-content: stretch;
+    flex-wrap: wrap;
   }
 
-  .directory-picker,
-  .status-field {
-    max-width: none;
-    width: 100%;
+  .directory-side {
+    align-self: flex-start;
   }
 
-  .skill-header {
-    flex-direction: column;
-  }
-
-  .skill-actions,
-  .panel-actions,
-  .pagination-actions {
-    width: 100%;
-  }
-
-  .skill-actions .button,
-  .panel-actions .button,
-  .pagination-actions .button,
-  .project-root-row .button {
-    width: 100%;
+  .directory-state {
+    text-align: left;
+    white-space: normal;
   }
 }
 </style>

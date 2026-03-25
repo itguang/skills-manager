@@ -22,10 +22,12 @@ html,
 body,
 #app {
   margin: 0;
+  height: 100%;
   min-height: 100%;
 }
 
 body {
+  overflow: hidden;
   background:
     radial-gradient(circle at top left, rgba(15, 118, 110, 0.16), transparent 28%),
     radial-gradient(circle at top right, rgba(198, 120, 46, 0.18), transparent 24%),
@@ -48,7 +50,7 @@ select {
   width: 100%;
   border: 1px solid var(--border);
   border-radius: 14px;
-  padding: 12px 14px;
+  padding: 10px 12px;
   background: rgba(255, 255, 255, 0.8);
   color: var(--text);
   outline: none;
