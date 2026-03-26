@@ -104,6 +104,8 @@ const selectedDirectoryIds = ref<string[]>([])
 const isDirectoryMenuOpen = ref(false)
 const isLoading = ref(false)
 const errorMessage = ref('')
+const skillSwitchingIds = ref<string[]>([])
+const skillDeletingIds = ref<string[]>([])
 const expandedSkillDescriptionIds = ref<string[]>([])
 const overflowingSkillDescriptionIds = ref<string[]>([])
 const skillDescriptionMeasureElements = new Map<string, HTMLElement>()
@@ -165,6 +167,24 @@ function getSkillDisplayPath (skill: any) {
   const normalizedSkillDirPath = normalizePath(skillDirPath)
   const compactedPath = normalizedSkillDirPath.replace(/\/[^/]+$/, '')
   return compactDisplayPath(compactedPath)
+}
+
+function openSkillDirectory (skill: any) {
+  const skillDirPath = typeof skill?.skillDirPath === 'string' ? skill.skillDirPath : ''
+
+  if (!skillDirPath) {
+    showNotification('未找到 skill 目录')
+    return
+  }
+
+  try {
+    const opened = window.utools.shellOpenPath(skillDirPath)
+    if (opened === false) {
+      showNotification('打开 skill 目录失败')
+    }
+  } catch (error: any) {
+    showNotification(error?.message || '打开 skill 目录失败')
+  }
 }
 
 async function refreshSkills () {
@@ -342,6 +362,59 @@ function toggleSkillDescriptionExpansion (skillId: string) {
 
 function handleWindowResize () {
   updateSkillDescriptionOverflowState()
+}
+
+function isSkillSwitching (skillId: string) {
+  return skillSwitchingIds.value.includes(skillId)
+}
+
+function isSkillDeleting (skillId: string) {
+  return skillDeletingIds.value.includes(skillId)
+}
+
+async function toggleSkillDisabled (skill: any) {
+  if (!skill?.id || !skill?.skillDirPath || isSkillSwitching(skill.id) || isSkillDeleting(skill.id)) return
+
+  skillSwitchingIds.value = [...skillSwitchingIds.value, skill.id]
+
+  try {
+    const nextDisabled = !skill.disabled
+    window.services.setSkillDisabled({
+      skillDirPath: skill.skillDirPath,
+      disabled: nextDisabled
+    })
+    skill.disabled = nextDisabled
+  } catch (error: any) {
+    showNotification(error?.message || '切换 skill 状态失败')
+  } finally {
+    skillSwitchingIds.value = skillSwitchingIds.value.filter((id) => id !== skill.id)
+  }
+}
+
+async function removeSkill (skill: any) {
+  if (!skill?.id || !skill?.skillDirPath || isSkillDeleting(skill.id) || isSkillSwitching(skill.id)) return
+
+  const confirmed = window.confirm(`确认删除 skill「${skill.name}」目录吗？\n\n${skill.skillDirPath}`)
+  if (!confirmed) return
+
+  skillDeletingIds.value = [...skillDeletingIds.value, skill.id]
+
+  try {
+    window.services.removeSkill({
+      skillDirPath: skill.skillDirPath
+    })
+
+    expandedSkillDescriptionIds.value = expandedSkillDescriptionIds.value.filter((id) => id !== skill.id)
+    overflowingSkillDescriptionIds.value = overflowingSkillDescriptionIds.value.filter((id) => id !== skill.id)
+    skillDescriptionMeasureElements.delete(skill.id)
+
+    await refreshSkills()
+    showNotification(`已删除 ${skill.name}`)
+  } catch (error: any) {
+    showNotification(error?.message || '删除 skill 失败')
+  } finally {
+    skillDeletingIds.value = skillDeletingIds.value.filter((id) => id !== skill.id)
+  }
 }
 
 const filteredSkills = computed(() => {
@@ -558,13 +631,40 @@ onBeforeUnmount(() => {
             >
               <div class="skill-row-top">
                 <div class="skill-copy">
-                  <h3>{{ skill.name }}</h3>
+                  <button class="skill-name-button" type="button" :title="skill.skillDirPath" @click="openSkillDirectory(skill)">
+                    <span class="skill-name">{{ skill.name }}</span>
+                  </button>
                   <span class="skill-path">{{ getSkillDisplayPath(skill) }}</span>
                 </div>
 
-                <span :class="['status-badge', skill.disabled ? 'disabled' : 'enabled']">
-                  {{ skill.disabled ? '已禁用' : '已启用' }}
-                </span>
+              <div class="skill-row-actions">
+                <button
+                  :class="['status-switch', skill.disabled ? 'off' : 'on']"
+                  type="button"
+                  role="switch"
+                  :aria-checked="String(!skill.disabled)"
+                  :disabled="isSkillSwitching(skill.id) || isSkillDeleting(skill.id)"
+                  @click="toggleSkillDisabled(skill)"
+                >
+                  <span class="status-switch-track">
+                    <span class="status-switch-thumb" />
+                  </span>
+                  <span class="status-switch-label">{{ skill.disabled ? '禁用' : '启用' }}</span>
+                </button>
+
+                <button
+                  class="skill-delete-icon-button"
+                  type="button"
+                  :disabled="isSkillSwitching(skill.id) || isSkillDeleting(skill.id)"
+                  :aria-label="`删除 ${skill.name}`"
+                  title="删除"
+                  @click="removeSkill(skill)"
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M9 3.75A2.25 2.25 0 0 1 11.25 1.5h1.5A2.25 2.25 0 0 1 15 3.75V4.5h3.75a.75.75 0 0 1 0 1.5h-1.02l-.84 13.36A2.25 2.25 0 0 1 14.64 21h-5.28a2.25 2.25 0 0 1-2.25-1.64L6.27 6H5.25a.75.75 0 0 1 0-1.5H9v-.75Zm1.5.75h3v-.75a.75.75 0 0 0-.75-.75h-1.5a.75.75 0 0 0-.75.75v.75Zm-2.73 1.5.82 13.12a.75.75 0 0 0 .75.63h5.28a.75.75 0 0 0 .75-.63L16.2 6H7.8Zm2.48 2.25a.75.75 0 0 1 .75.75v7.5a.75.75 0 0 1-1.5 0V9a.75.75 0 0 1 .75-.75Zm3.5 0A.75.75 0 0 1 14.5 9v7.5a.75.75 0 0 1-1.5 0V9a.75.75 0 0 1 .75-.75Z" fill="currentColor" />
+                  </svg>
+                </button>
+              </div>
               </div>
 
               <div class="skill-row-bottom">
@@ -721,7 +821,7 @@ onBeforeUnmount(() => {
 
 .settings-header h2,
 .empty-state h3,
-.skill-copy h3 {
+.skill-name {
   margin: 0;
   font-family: "Avenir Next", "IBM Plex Sans", sans-serif;
   letter-spacing: -0.03em;
@@ -923,13 +1023,39 @@ onBeforeUnmount(() => {
   min-width: 0;
 }
 
-.skill-copy h3 {
+.skill-name-button {
+  min-width: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--brand);
+  cursor: pointer;
+  text-align: left;
+}
+
+.skill-name-button:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--brand) 42%, transparent);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+.skill-name {
+  display: block;
   min-width: 0;
   font-size: 16px;
   line-height: 1.2;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.skill-name-button:hover .skill-name {
+  text-decoration: underline;
+}
+
+.skill-name-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .skill-description {
@@ -953,14 +1079,94 @@ onBeforeUnmount(() => {
   font-size: 12px;
 }
 
-.status-badge {
+.status-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.skill-row-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.status-switch:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.status-switch-track {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  width: 32px;
+  height: 18px;
+  border-radius: 999px;
+  transition: background-color 0.16s ease;
+}
+
+.status-switch.on {
+  color: #16a34a;
+  font-weight: 800;
+}
+
+.status-switch.off {
+  color: #dc2626;
+  font-weight: 800;
+}
+
+.status-switch.on .status-switch-track {
+  background: rgba(22, 163, 74, 0.5);
+}
+
+.status-switch.off .status-switch-track {
+  background: rgba(220, 38, 38, 0.5);
+}
+
+.status-switch-thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.24);
+  transition: transform 0.16s ease;
+}
+
+.status-switch.on .status-switch-thumb {
+  transform: translateX(14px);
+}
+
+.skill-delete-icon-button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 4px 8px;
+  width: 36px;
+  height: 22px;
+  padding: 0;
+  border: none;
+  background: transparent;
   border-radius: 999px;
-  font-size: 11px;
-  font-weight: 700;
+  color: #dc2626;
+  cursor: pointer;
+}
+
+.skill-delete-icon-button svg {
+  width: 16px;
+  height: 16px;
+}
+
+.skill-delete-icon-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .skill-path {
@@ -1009,17 +1215,6 @@ onBeforeUnmount(() => {
   font-weight: 700;
   line-height: 1.2;
   cursor: pointer;
-}
-
-.status-badge.enabled,
-.status-badge.enabled {
-  background: rgba(15, 118, 110, 0.12);
-  color: var(--brand);
-}
-
-.status-badge.disabled {
-  background: rgba(180, 35, 24, 0.12);
-  color: var(--danger);
 }
 
 .settings-header {
