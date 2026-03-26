@@ -4,14 +4,14 @@
 
 <h1>Skills Manager</h1>
 
-</div>
-
 [![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)](https://github.com/yourusername/skills-manager)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Vue](https://img.shields.io/badge/Vue-3.5.13-b42da8.svg)](https://vuejs.org/)
 [![uTools](https://img.shields.io/badge/uTools-Plugin-orange.svg)](https://www.u-tools.cn/)
 [![Node](https://img.shields.io/badge/Node.js-16%2B-green.svg)](https://nodejs.org/)
 [![Vite](https://img.shields.io/badge/Vite-6.0.11-646cff.svg)](https://vitejs.dev/)
+
+</div>
 
 <blockquote>
 一个强大且美观的 uTools 插件，用于可视化管理本地已安装的 GenX Skills，提供便捷的目录配置、技能浏览和快速启动功能。
