@@ -1,31 +1,212 @@
-该项目目的是用来管理 当前机器上的已安装的 skills,提供一个可视化 UI 来管理skill
+# <img src="imgs/logo.png" width="32" alt="logo"> Skills Manager
 
-该项目是一个开 utools 插件的项目: utools 插件开发者文档:https://www.u-tools.cn/docs/developer/basic/getting-started.html ,请把这个开发者文档相关 信息更新到 AGENTS.md,以便后续可以参考开发,尤其是 API 相关信息
+[![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)](https://github.com/yourusername/skills-manager)
+[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![Vue](https://img.shields.io/badge/Vue-3.5.13-b42da8.svg)](https://vuejs.org/)
+[![uTools](https://img.shields.io/badge/uTools-Plugin-orange.svg)](https://www.u-tools.cn/)
+[![Node](https://img.shields.io/badge/Node.js-16%2B-green.svg)](https://nodejs.org/)
+[![Vite](https://img.shields.io/badge/Vite-6.0.11-646cff.svg)](https://vitejs.dev/)
 
+<blockquote>
+一个强大且美观的 uTools 插件，用于可视化管理本地已安装的 GenX Skills，提供便捷的目录配置、技能浏览和快速启动功能。
+</blockquote>
 
+---
 
-该项目目的是用来管理 当前机器上的已安装的 skills, 提供一个可视化 UI 来管理. 
-可以配置管理哪些目录下的 skills,如:下面这些目录为全局目录,应该放在默认配置中.
+## ✨ 特性
 
-- 项目配置：.opencode/skills/<name>/SKILL.md
-- 全局配置：~/.config/opencode/skills/<name>/SKILL.md
-- 项目 Claude 兼容：.claude/skills/<name>/SKILL.md
-- 全局 Claude 兼容：~/.claude/skills/<name>/SKILL.md
-- 项目代理兼容：.agents/skills/<name>/SKILL.md
-- 全局代理兼容：~/.agents/skills/<name>/SKILL.md
+- 🔍 **可视化浏览** - 直观的列表视图展示所有已安装的 Skills
+- ⚡️ **快速启动** - 支持多指令快速调用，提高工作效率
+- ⚙️ **灵活配置** - 自定义扫描目录路径，适应不同工作环境
+- 🎨 **现代化 UI** - 基于 Vue 3 构建的现代化用户界面
+- 🌓 **暗色模式** - 完美支持系统暗色模式切换
+- 📦 **轻量高效** - 基于 Vite 构建，启动迅速
 
-关于 skill 就参考 skill 规范即可.
+## 📸 截图
 
-用户可以进行如下操作:
-1.选择不同的 目录,可以查看该目录下有哪些 skills,分页列表展示,也要展示总数,并且下来选择目录时,支持多选,并且下拉框中需要展示每个目录有多少个 skills,可以通过 skill name 关键字检索
-2.列表展示 skill 时,只需要展示信息 skill name + skill description 即可
-3.可以对该 skill 进行管理,如删除,禁用(这里要思考下禁用 skill 该用什么方式实现,禁用的意思是不要让 agent 加载这个 skill),禁用后的 skill 也要展示在列表中,可以给一个筛选项进行筛选.
+### 主界面
+![主界面](imgs/img.png)
 
+### 设置界面
+![设置界面](imgs/img_1.png)
 
-把首页精简下:
-1.只保留 skill 列表查看功能,排版要紧凑一点,因为 utool 插件默认打开窗口很小,你可以去 utool 开发者文档看下这个窗口大小,排版优美紧凑
-2.把目录配置相关功能,放在一个单独的页面中,通过在主页面右下角放置一个设置按钮,点击后打开新页面进行目录配置.这里你自己思考,是打开新页面还是弹窗,选个交互友好的方式,并且目录配置也要排版紧凑优美
-3.把 Skills Manager 这个模块组件和右边的 统计模块(总技能数,已启用,已禁用),重新排版,放在一个组件中,并且占据一行,排版紧凑优美,适应 utool 默认小窗口
+## 🚀 快速开始
 
-技能描述,现在占满了一行,挤压了最右边技能状态的位置,修改下,技能描述最多占满一行 70%宽度,最多显示两行,超过之后可以通过展开/收起进
-行展示
+### 方式一：uTools 应用商店安装
+
+在 uTools 应用商店搜索以下关键词即可找到并安装：
+
+```
+Skills Manager | 技能管理 | skills | skill manager
+```
+
+### 方式二：本地安装
+
+1. **克隆仓库**
+
+```bash
+git clone https://github.com/yourusername/skills-manager.git
+cd skills-manager
+```
+
+2. **安装依赖**
+
+```bash
+npm install
+```
+
+3. **开发模式**
+
+```bash
+npm run dev
+```
+
+> 💡 开发服务器将在 http://localhost:5173 启动
+
+4. **构建生产版本**
+
+```bash
+npm run build
+```
+
+构建产物将输出到 `dist/` 目录，将其打包为 uTools 插件即可使用。
+
+## 📖 使用指南
+
+### 快捷指令
+
+在 uTools 中输入以下任一指令即可启动插件：
+
+| 指令 | 描述 |
+|------|------|
+| `skills` | 快速启动 Skills Manager |
+| `skills manager` | 启动技能管理器 |
+| `管理 skills` | 中英文混合指令 |
+| `技能管理` | 中文指令 |
+
+### 核心功能
+
+1. **查看 Skills 列表** - 自动扫描并列出所有已安装的 Skills
+2. **配置扫描目录** - 在设置页面自定义 Skills 存储路径
+3. **详细信息展示** - 查看 Skill 的描述、版本等元信息
+
+## 🛠 技术栈
+
+| 技术 | 版本 | 说明 |
+|------|------|------|
+| ![Vue](https://img.shields.io/badge/Vue-3.5.13-b42da8.svg) | 3.5.13 | 渐进式 JavaScript 框架 |
+| ![TypeScript](https://img.shields.io/badge/TypeScript-5.0.0-blue.svg) | 5.0+ | JavaScript 的超集 |
+| ![Vite](https://img.shields.io/badge/Vite-6.0.11-646cff.svg) | 6.0.11 | 下一代前端构建工具 |
+| ![uTools](https://img.shields.io/badge/uTools-API-orange.svg) | Latest | uTools 插件 API |
+| ![Node.js](https://img.shields.io/badge/Node.js-16%2B-green.svg) | 16+ | JavaScript 运行环境 |
+
+## 📁 项目结构
+
+```
+skills-manager/
+├── public/
+│   ├── plugin.json           # 插件配置文件
+│   ├── logo.png             # 插件图标
+│   └── preload/
+│       ├── package.json     # Preload 依赖配置
+│       └── services.js      # Node.js 预加载脚本
+├── src/
+│   ├── main.js              # 应用入口文件
+│   ├── App.vue              # 根组件
+│   ├── main.css             # 全局样式文件
+│   └── */                   # 功能组件目录
+├── dist/                    # 构建输出目录
+├── imgs/                    # 项目截图资源
+├── package.json             # 项目依赖配置
+├── README.md                # 项目说明文档
+└── AGENTS.md                # 开发规范文档
+```
+
+## 🧩 开发规范
+
+本项目严格遵循以下开发规范：
+
+- **前端代码**
+  - 使用 Vue 3 Composition API (`<script setup>`)
+  - 采用 TypeScript 提供类型安全
+  - 组件命名使用 `PascalCase`
+  - 变量/函数使用 `camelCase`
+  - 常量使用 `UPPER_SNAKE_CASE`
+
+- **Preload 代码**
+  - 使用 CommonJS 规范（`require`）
+  - 保持代码清晰可读，不可混淆编译
+  - 通过 `window.services.*` 暴露服务
+
+- **API 调用**
+  - uTools API: `window.utools.*`
+  - 本地服务: `window.services.*`
+  - 不在 Vue 组件中直接使用 Node.js 模块
+
+> 📚 详细规范请参考 [AGENTS.md](./AGENTS.md) 文档
+
+## 🔧 配置说明
+
+### plugin.json 关键配置
+
+```json
+{
+  "main": "index.html",
+  "preload": "preload/services.js",
+  "pluginSetting": {
+    "single": true,
+    "height": 544
+  }
+}
+```
+
+- `main` - 插件入口 HTML 文件
+- `preload` - 预加载脚本路径
+- `pluginSetting.single` - 单例运行模式
+- `pluginSetting.height` - 默认窗口高度
+
+## 🤝 贡献指南
+
+我们欢迎所有形式的贡献！如果您想改进这个项目，请：
+
+1. Fork 本仓库
+2. 创建特性分支 (`git checkout -b feature/AmazingFeature`)
+3. 提交更改 (`git commit -m 'Add some AmazingFeature'`)
+4. 推送到分支 (`git push origin feature/AmazingFeature`)
+5. 提交 Pull Request
+
+## 📝 更新日志
+
+### [1.0.0] - 2026-03-26
+
+#### 新增
+- ✨ 插件初始发布
+- ✨ Skills 列表可视化
+- ✨ 扫描目录配置功能
+- ✨ 多指令快捷启动
+- ✨ 暗色模式支持
+
+## 📄 许可证
+
+本项目采用 [MIT License](LICENSE) 开源协议。
+
+## 🔗 相关资源
+
+- [uTools 官方文档](https://www.u-tools.cn/docs/)
+- [uTools 插件快速开始](https://www.u-tools.cn/docs/developer/basic/getting-started.html)
+- [plugin.json 配置说明](https://www.u-tools.cn/docs/developer/information/plugin-json.html)
+- [uTools API 文档](https://www.u-tools.cn/docs/developer/docs.html)
+- [Vue 3 官方文档](https://vuejs.org/)
+- [Vite 官方文档](https://vitejs.dev/)
+
+## ⭐ Star History
+
+如果这个项目对您有帮助，请给我们一个 Star ⭐
+
+---
+
+<div align="center">
+
+Made with ❤️ by the Skills Manager Team
+
+</div>
