@@ -1,4 +1,10 @@
-# <img src="imgs/logo.png" width="32" alt="logo"> Skills Manager
+<div align="center">
+
+[<img src="imgs/logo.png" width="128" alt="logo">](#)
+
+<h1>Skills Manager</h1>
+
+</div>
 
 [![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)](https://github.com/yourusername/skills-manager)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
