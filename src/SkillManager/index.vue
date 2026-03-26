@@ -246,26 +246,6 @@ function browseDirectoryConfig (directory: any) {
   directory.path = directories[0]
 }
 
-function addCustomDirectory () {
-  const directories = window.utools.showOpenDialog({
-    title: '选择要管理的 skill 目录',
-    properties: ['openDirectory']
-  })
-
-  if (!directories || directories.length === 0) return
-
-  const selectedPath = directories[0]
-  directoryConfigs.value = [
-    ...directoryConfigs.value,
-    {
-      id: `custom-${Date.now()}`,
-      label: selectedPath.split('/').filter(Boolean).at(-1) || '自定义目录',
-      path: selectedPath,
-      source: 'custom'
-    }
-  ]
-}
-
 function removeDirectoryConfig (directoryId: string) {
   directoryConfigs.value = directoryConfigs.value.filter((item) => item.id !== directoryId)
 }
@@ -711,7 +691,6 @@ onBeforeUnmount(() => {
 
         <section class="settings-card">
           <div class="settings-actions">
-            <button class="button ghost compact" type="button" @click="addCustomDirectory">添加目录</button>
             <button class="button ghost compact" type="button" @click="resetDefaultDirectories">重置默认</button>
           </div>
 
