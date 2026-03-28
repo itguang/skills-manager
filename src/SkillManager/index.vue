@@ -1159,6 +1159,7 @@ onBeforeUnmount(() => {
 }
 
 .skills-list {
+  gap: 8px;
   padding-right: 2px;
 }
 
@@ -1212,8 +1213,8 @@ onBeforeUnmount(() => {
 .skill-card :deep(.el-card__body),
 .directory-card :deep(.el-card__body) {
   display: grid;
-  gap: 12px;
-  padding: 14px 16px;
+  gap: 10px;
+  padding: 12px 16px;
 }
 
 .settings-summary-card,
@@ -1260,6 +1261,7 @@ onBeforeUnmount(() => {
 }
 
 .skill-meta-row {
+  gap: 8px;
   flex-wrap: wrap;
   justify-content: flex-start;
 }
@@ -1294,6 +1296,7 @@ onBeforeUnmount(() => {
 }
 
 .skill-bottom {
+  gap: 8px;
   justify-content: flex-start;
   align-items: flex-start;
 }
