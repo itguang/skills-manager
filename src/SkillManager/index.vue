@@ -1,6 +1,6 @@
 <script lang="ts" setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { Back, Delete, Plus, Setting } from '@element-plus/icons-vue'
+import { Back, Delete, Setting } from '@element-plus/icons-vue'
 
 const props = defineProps({
   enterAction: {
@@ -18,7 +18,6 @@ const PAGE_HEIGHT = 816
 const DESCRIPTION_PREVIEW_LINE_COUNT = 2
 const DESCRIPTION_EXPAND_LABEL = '查看更多'
 const DESCRIPTION_COLLAPSE_LABEL = '收起'
-const CUSTOM_GLOBAL_DIRECTORY_LABEL = '自定义全局目录'
 const TOOLBAR_SELECT_POPPER_OPTIONS = {
   modifiers: [
     {
@@ -103,26 +102,13 @@ function setStorageItem (key: string, value: any) {
 function mergeDirectoryConfigs (savedConfigs: any[]) {
   const savedItems = Array.isArray(savedConfigs) ? savedConfigs : []
   const savedById = new Map(savedItems.map((item) => [item.id, item]))
-  const defaultIds = new Set(DEFAULT_DIRECTORY_CONFIGS.map((item) => item.id))
 
   const mergedDefaults = DEFAULT_DIRECTORY_CONFIGS.map((item) => ({
     ...savedById.get(item.id),
     ...item
   }))
 
-  const customItems = savedItems.filter((item) => !defaultIds.has(item.id))
-
-  return [...mergedDefaults, ...customItems]
-}
-
-function createCustomGlobalDirectoryConfig (label: string, path: string) {
-  return {
-    id: `custom-global-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-    label,
-    path,
-    source: 'custom',
-    scope: 'global'
-  }
+  return mergedDefaults
 }
 
 const currentView = ref<'list' | 'settings'>('list')
@@ -142,11 +128,6 @@ const overflowingSkillDescriptionIds = ref<string[]>([])
 const collapsedSkillDescriptions = ref<Record<string, string>>({})
 const skillDescriptionMeasureElements = new Map<string, HTMLElement>()
 const homeDirectory = ref('')
-const isGlobalDirectoryDialogVisible = ref(false)
-const globalDirectoryDraft = ref({
-  label: '',
-  path: ''
-})
 
 function persistSettings () {
   setStorageItem(STORAGE_KEYS.projectRoot, projectRoot.value)
@@ -251,66 +232,6 @@ function resetDefaultDirectories () {
   showNotification('已恢复默认目录配置')
 }
 
-function resetGlobalDirectoryDraft () {
-  globalDirectoryDraft.value = {
-    label: '',
-    path: ''
-  }
-}
-
-function openGlobalDirectoryDialog () {
-  resetGlobalDirectoryDraft()
-  isGlobalDirectoryDialogVisible.value = true
-}
-
-function closeGlobalDirectoryDialog () {
-  isGlobalDirectoryDialogVisible.value = false
-  resetGlobalDirectoryDraft()
-}
-
-function browseGlobalDirectoryDraftPath () {
-  const directories = window.utools.showOpenDialog({
-    title: '选择全局目录',
-    properties: ['openDirectory']
-  })
-
-  if (!directories || directories.length === 0) return
-
-  globalDirectoryDraft.value.path = directories[0]
-}
-
-async function addGlobalDirectoryConfig () {
-  const label = globalDirectoryDraft.value.label.trim()
-  const path = globalDirectoryDraft.value.path.trim()
-
-  if (!label) {
-    showNotification('请输入全局路径描述')
-    return
-  }
-
-  if (!path) {
-    showNotification('请选择全局目录')
-    return
-  }
-
-  const previousDirectoryConfigs = [...directoryConfigs.value]
-  const nextDirectoryConfig = createCustomGlobalDirectoryConfig(label, path)
-
-  directoryConfigs.value = [...directoryConfigs.value, nextDirectoryConfig]
-  isGlobalDirectoryDialogVisible.value = false
-  resetGlobalDirectoryDraft()
-
-  try {
-    persistSettings()
-    await refreshSkills()
-    showNotification('已新增全局目录配置')
-  } catch (error: any) {
-    directoryConfigs.value = previousDirectoryConfigs
-    persistSettings()
-    showNotification(error?.message || '新增全局目录配置失败')
-  }
-}
-
 function browseProjectRoot () {
   const directories = window.utools.showOpenDialog({
     title: '选择项目根目录',
@@ -331,21 +252,6 @@ function browseDirectoryConfig (directory: any) {
   if (!directories || directories.length === 0) return
 
   directory.path = directories[0]
-}
-
-async function removeDirectoryConfig (directoryId: string) {
-  const previousDirectoryConfigs = [...directoryConfigs.value]
-  directoryConfigs.value = directoryConfigs.value.filter((item) => item.id !== directoryId)
-
-  try {
-    persistSettings()
-    await refreshSkills()
-    showNotification('已删除自定义目录配置')
-  } catch (error: any) {
-    directoryConfigs.value = previousDirectoryConfigs
-    persistSettings()
-    showNotification(error?.message || '删除自定义目录配置失败')
-  }
 }
 
 function getDirectoryScanState (directoryId: string) {
@@ -575,7 +481,6 @@ const searchableDirectoryOptions = computed(() => scannedDirectories.value
 const directorySections = computed(() => {
   const globalItems = []
   const projectItems = []
-  const customItems = []
 
   for (const directory of directoryConfigs.value) {
     if (directory.scope === 'global' || (typeof directory.id === 'string' && directory.id.endsWith('global'))) {
@@ -585,16 +490,12 @@ const directorySections = computed(() => {
 
     if (directory.scope === 'project' || (typeof directory.id === 'string' && directory.id.endsWith('project'))) {
       projectItems.push(directory)
-      continue
     }
-
-    customItems.push(directory)
   }
 
   return [
     { key: 'global', title: '全局路径配置', items: globalItems },
-    { key: 'project', title: '项目路径配置', items: projectItems },
-    { key: 'custom', title: '自定义路径配置', items: customItems }
+    { key: 'project', title: '项目路径配置', items: projectItems }
   ].filter((section) => section.items.length > 0)
 })
 
@@ -887,15 +788,9 @@ onBeforeUnmount(() => {
                   :style="{ '--section-index': sectionIndex }"
                   class="directory-section"
                 >
-                    <div
-                      :class="['directory-section-header', { 'directory-section-header--inline': section.key === 'global' }]"
-                    >
+                    <div class="directory-section-header">
                       <div class="directory-section-copy">
                         <h3>{{ section.title }}</h3>
-                      </div>
-
-                      <div v-if="section.key === 'global'" class="directory-section-actions">
-                        <el-button :icon="Plus" type="primary" plain @click="openGlobalDirectoryDialog">新增全局目录</el-button>
                       </div>
                     </div>
 
@@ -933,22 +828,8 @@ onBeforeUnmount(() => {
 
                           <div class="directory-card-actions">
                             <el-button plain @click="browseDirectoryConfig(directory)">选择</el-button>
-                            <el-button
-                              v-if="directory.source === 'custom'"
-                              plain
-                              type="danger"
-                              @click="removeDirectoryConfig(directory.id)"
-                            >
-                              删除
-                            </el-button>
                           </div>
                         </div>
-
-                        <el-input
-                          v-if="directory.source === 'custom'"
-                          v-model="directory.label"
-                          placeholder="输入全局目录名称"
-                        />
 
                         <el-input
                           v-model="directory.path"
@@ -968,45 +849,6 @@ onBeforeUnmount(() => {
         </section>
       </section>
     </Transition>
-
-    <el-dialog
-      v-model="isGlobalDirectoryDialogVisible"
-      title="新增全局目录"
-      width="520px"
-      @closed="resetGlobalDirectoryDraft"
-    >
-      <div class="directory-dialog-form">
-        <div class="directory-dialog-field">
-          <span class="directory-dialog-label">全局路径描述</span>
-          <el-input
-            v-model="globalDirectoryDraft.label"
-            clearable
-            placeholder="例如：团队共享技能"
-          />
-        </div>
-
-        <div class="directory-dialog-field">
-          <span class="directory-dialog-label">目录路径</span>
-
-          <div class="directory-dialog-path-row">
-            <el-input
-              v-model="globalDirectoryDraft.path"
-              clearable
-              placeholder="选择一个全局技能目录"
-            />
-
-            <el-button plain @click="browseGlobalDirectoryDraftPath">选择目录</el-button>
-          </div>
-        </div>
-      </div>
-
-      <template #footer>
-        <div class="directory-dialog-footer">
-          <el-button @click="closeGlobalDirectoryDialog">取消</el-button>
-          <el-button type="primary" @click="addGlobalDirectoryConfig">确认新增</el-button>
-        </div>
-      </template>
-    </el-dialog>
   </div>
 </template>
 
@@ -1197,52 +1039,12 @@ onBeforeUnmount(() => {
 .list-stats,
 .skill-actions,
 .directory-card-actions,
-.directory-section-actions,
 .settings-actions,
 .settings-summary-grid,
 .list-header-actions {
   display: flex;
   gap: 10px;
   flex-wrap: wrap;
-}
-
-.directory-section-actions {
-  margin-left: auto;
-  justify-content: flex-end;
-  flex-shrink: 0;
-}
-
-.directory-dialog-form,
-.directory-dialog-field {
-  display: grid;
-  gap: 10px;
-}
-
-.directory-dialog-label {
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--text);
-}
-
-.directory-dialog-path-row,
-.directory-dialog-footer {
-  display: flex;
-  gap: 10px;
-  align-items: center;
-}
-
-.directory-dialog-path-row :deep(.el-input) {
-  flex: 1;
-}
-
-.directory-dialog-footer {
-  justify-content: flex-end;
-}
-
-.directory-section-header--inline {
-  flex-direction: row;
-  align-items: center;
-  flex-wrap: nowrap;
 }
 
 .list-header-actions {
@@ -1626,11 +1428,6 @@ onBeforeUnmount(() => {
   }
 
   .list-header-top {
-    flex-direction: row;
-    align-items: center;
-  }
-
-  .directory-section-header--inline {
     flex-direction: row;
     align-items: center;
   }
