@@ -1,5 +1,6 @@
 <script lang="ts" setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { Setting } from '@element-plus/icons-vue'
 
 const props = defineProps({
   enterAction: {
@@ -440,18 +441,6 @@ const directoryFilterOptions = computed(() => {
   return options
 })
 
-const directorySummaryText = computed(() => {
-  if (directoryFilterOptions.value.length === 0) return '未发现可筛选目录'
-  if (selectedDirectoryIds.value.length === directoryFilterOptions.value.length) {
-    return `目录范围：全部 ${directoryFilterOptions.value.length} 个`
-  }
-  if (selectedDirectoryIds.value.length === 0) return '目录范围：未选择'
-  return `目录范围：已选 ${selectedDirectoryIds.value.length} 个`
-})
-
-const enabledSkillCount = computed(() => filteredSkills.value.filter((skill) => !skill.disabled).length)
-const disabledSkillCount = computed(() => filteredSkills.value.filter((skill) => skill.disabled).length)
-
 const directorySections = computed(() => {
   const globalItems = []
   const projectItems = []
@@ -536,78 +525,55 @@ onBeforeUnmount(() => {
       <section v-if="currentView === 'list'" key="list" class="page-shell">
         <section class="hero-toolbar panel-surface panel-animated">
           <div class="hero-toolbar-top">
-            <div class="page-copy page-copy--compact">
-              <div class="hero-title-row">
-                <span class="page-kicker">本地 skills</span>
-                <h1>Skill 管理</h1>
-                <p>支持名称、描述、目录路径联合检索</p>
-              </div>
-            </div>
-
-            <div class="stats-strip stats-strip--compact">
-              <article class="stat-chip">
-                <span class="stat-chip-label">已连接目录</span>
-                <strong>{{ healthyDirectoryCount }}/{{ scannedDirectories.length }}</strong>
-              </article>
-              <article class="stat-chip">
-                <span class="stat-chip-label">列表结果</span>
-                <strong>{{ filteredSkills.length }}</strong>
-              </article>
-              <article class="stat-chip">
-                <span class="stat-chip-label">启用</span>
-                <strong>{{ enabledSkillCount }}</strong>
-              </article>
-              <article class="stat-chip">
-                <span class="stat-chip-label">禁用</span>
-                <strong>{{ disabledSkillCount }}</strong>
-              </article>
-            </div>
-
             <div class="page-actions page-actions--compact">
-              <el-button plain @click="openSettings">目录配置</el-button>
-              <el-button :loading="isLoading" type="primary" @click="refreshSkills">查询</el-button>
+              <button
+                class="icon-action-button"
+                type="button"
+                title="目录配置"
+                aria-label="目录配置"
+                @click="openSettings"
+              >
+                <el-icon><Setting /></el-icon>
+              </button>
             </div>
           </div>
 
-          <div class="hero-toolbar-bottom">
-            <el-input
-              v-model="skillKeyword"
-              class="toolbar-search"
-              clearable
-              placeholder="搜索 skill 名称、描述或来源目录"
-            />
-
-            <el-select
-              v-model="selectedDirectoryIds"
-              class="toolbar-directory"
-              collapse-tags
-              collapse-tags-tooltip
-              clearable
-              multiple
-              placeholder="筛选目录"
-            >
-              <el-option
-                v-for="directory in directoryFilterOptions"
-                :key="directory.id"
-                :label="directory.label"
-                :value="directory.id"
+            <div class="hero-toolbar-bottom">
+              <el-input
+                v-model="skillKeyword"
+                class="toolbar-search"
+                clearable
+                placeholder="搜索 skill 名称、描述或来源目录"
               />
-            </el-select>
 
-            <el-select v-model="statusFilter" class="toolbar-status">
-              <el-option
-                v-for="option in STATUS_OPTIONS"
-                :key="option.value"
-                :label="option.label"
-                :value="option.value"
-              />
-            </el-select>
+              <el-select
+                v-model="selectedDirectoryIds"
+                class="toolbar-directory"
+                collapse-tags
+                collapse-tags-tooltip
+                clearable
+                multiple
+                placeholder="筛选目录"
+              >
+                <el-option
+                  v-for="directory in directoryFilterOptions"
+                  :key="directory.id"
+                  :label="directory.label"
+                  :value="directory.id"
+                />
+              </el-select>
 
-            <div class="toolbar-summary">
-              <span>{{ directorySummaryText }}</span>
-              <span>联合检索</span>
+              <el-select v-model="statusFilter" class="toolbar-status">
+                <el-option
+                  v-for="option in STATUS_OPTIONS"
+                  :key="option.value"
+                  :label="option.label"
+                  :value="option.value"
+                />
+              </el-select>
+
+              <el-button :loading="isLoading" type="primary" @click="refreshSkills" style="height: 38px;">查询</el-button>
             </div>
-          </div>
         </section>
 
         <el-alert
@@ -994,7 +960,6 @@ onBeforeUnmount(() => {
 .project-root-copy p,
 .directory-section-copy p,
 .list-heading p,
-.toolbar-summary,
 .skill-path,
 .directory-state {
   color: var(--text-soft);
@@ -1012,7 +977,6 @@ onBeforeUnmount(() => {
 }
 
 .page-actions,
-.stats-strip,
 .list-stats,
 .skill-actions,
 .directory-card-actions,
@@ -1027,66 +991,50 @@ onBeforeUnmount(() => {
   position: relative;
   z-index: 1;
   flex-shrink: 0;
+  align-self: flex-start;
 }
 
-.stats-strip {
-  position: relative;
-  z-index: 1;
-  min-width: 0;
-}
-
-.stats-strip--compact {
-  flex: 1;
-  justify-content: flex-end;
-}
-
-.stat-chip,
-.summary-metric {
-  min-width: 0;
-  padding: 10px 12px;
-  border: 1px solid rgba(255, 255, 255, 0.5);
-  border-radius: 16px;
-  background: rgba(255, 255, 255, 0.48);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.58);
-}
-
-.stat-chip {
-  flex: 0 1 auto;
-}
-
-.stat-chip-label,
-.summary-metric span {
-  display: block;
+.icon-action-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface-strong);
   color: var(--text-soft);
-  font-size: 11px;
-  line-height: 1.2;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45);
+  cursor: pointer;
+  transition: color 0.18s ease, border-color 0.18s ease, background-color 0.18s ease, transform 0.18s ease;
 }
 
-.stat-chip strong,
-.summary-metric strong {
-  display: block;
-  margin-top: 6px;
-  font-size: 18px;
-  line-height: 1;
-  letter-spacing: -0.05em;
+.icon-action-button:hover {
+  color: var(--brand);
+  border-color: color-mix(in srgb, var(--brand) 28%, var(--border));
+  background: color-mix(in srgb, var(--surface-strong) 88%, var(--brand) 12%);
+  transform: translateY(-1px);
+}
+
+.icon-action-button:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--brand) 28%, transparent);
+  outline-offset: 2px;
+}
+
+.icon-action-button svg {
+  width: 18px;
+  height: 18px;
 }
 
 .hero-toolbar-bottom {
   display: grid;
-  grid-template-columns: minmax(0, 1.7fr) minmax(200px, 1fr) 130px minmax(180px, auto);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 0.5fr) minmax(0, 0.5fr) auto;
   gap: 10px;
   align-items: center;
   position: relative;
   z-index: 1;
   margin-top: 10px;
-}
-
-.toolbar-summary {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  font-size: 12px;
-  white-space: nowrap;
 }
 
 .list-panel,
@@ -1138,6 +1086,30 @@ onBeforeUnmount(() => {
 .settings-layout {
   gap: 14px;
   padding-right: 2px;
+}
+
+.summary-metric {
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.48);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.58);
+}
+
+.summary-metric span {
+  display: block;
+  color: var(--text-soft);
+  font-size: 11px;
+  line-height: 1.2;
+}
+
+.summary-metric strong {
+  display: block;
+  margin-top: 6px;
+  font-size: 18px;
+  line-height: 1;
+  letter-spacing: -0.05em;
 }
 
 .skill-card,
@@ -1344,10 +1316,9 @@ onBeforeUnmount(() => {
   }
 
   .hero-toolbar-bottom {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr) minmax(0, 0.5fr) minmax(0, 0.5fr) auto;
   }
 
-  .toolbar-summary,
   .list-header,
   .settings-topbar,
   .settings-summary-header,
@@ -1361,7 +1332,6 @@ onBeforeUnmount(() => {
   }
 
   .page-actions,
-  .stats-strip--compact,
   .list-stats,
   .settings-actions,
   .directory-card-actions,
@@ -1389,7 +1359,6 @@ onBeforeUnmount(() => {
     grid-template-columns: 1fr;
   }
 
-  .stats-strip,
   .settings-summary-grid {
     display: grid;
     grid-template-columns: 1fr;
