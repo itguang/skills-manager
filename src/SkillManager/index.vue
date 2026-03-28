@@ -1,6 +1,6 @@
 <script lang="ts" setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { Setting } from '@element-plus/icons-vue'
+import { Back, Delete, Setting } from '@element-plus/icons-vue'
 
 const props = defineProps({
   enterAction: {
@@ -11,11 +11,21 @@ const props = defineProps({
 
 const STORAGE_KEYS = {
   directories: 'skills-manager.directories',
-  projectRoot: 'skills-manager.projectRoot',
-  selectedDirectoryIds: 'skills-manager.selected-directory-ids'
+  projectRoot: 'skills-manager.projectRoot'
 }
 
 const PAGE_HEIGHT = 544
+const DESCRIPTION_PREVIEW_LINE_COUNT = 2
+const DESCRIPTION_EXPAND_LABEL = '查看更多'
+const DESCRIPTION_COLLAPSE_LABEL = '收起'
+const TOOLBAR_SELECT_POPPER_OPTIONS = {
+  modifiers: [
+    {
+      name: 'flip',
+      enabled: false
+    }
+  ]
+}
 
 const STATUS_OPTIONS = [
   { value: 'all', label: '全部状态' },
@@ -26,51 +36,55 @@ const STATUS_OPTIONS = [
 const DEFAULT_DIRECTORY_CONFIGS = [
   {
     id: 'preset-opencode-project',
-    label: '项目 OpenCode',
+    label: '项目 OpenCode 技能',
     path: '${projectRoot}/.opencode/skills',
     source: 'preset'
   },
   {
     id: 'preset-opencode-global',
-    label: '全局 OpenCode',
+    label: '全局 OpenCode 技能',
     path: '~/.config/opencode/skills',
     source: 'preset'
   },
   {
     id: 'preset-claude-project',
-    label: '项目 Claude 兼容',
+    label: '项目 Claude 技能',
     path: '${projectRoot}/.claude/skills',
     source: 'preset'
   },
   {
+    id: 'preset-codex-project',
+    label: '项目 Codex 技能',
+    path: '${projectRoot}/.codex/skills',
+    source: 'preset'
+  },
+  {
     id: 'preset-claude-global',
-    label: '全局 Claude 兼容',
+    label: '全局 Claude 技能',
     path: '~/.claude/skills',
     source: 'preset'
   },
   {
+    id: 'preset-codex-global',
+    label: '全局 Codex 技能',
+    path: '~/.codex/skills',
+    source: 'preset'
+  },
+  {
     id: 'preset-agents-project',
-    label: '项目代理兼容',
+    label: '项目共享技能',
     path: '${projectRoot}/.agents/skills',
     source: 'preset'
   },
   {
     id: 'preset-agents-global',
-    label: '全局代理兼容',
+    label: '全局共享技能',
     path: '~/.agents/skills',
     source: 'preset'
   }
 ]
 
 const DEFAULT_DIRECTORY_LABELS = new Map(DEFAULT_DIRECTORY_CONFIGS.map((item) => [item.id, item.label]))
-const DIRECTORY_FILTER_ORDER = [
-  'preset-opencode-global',
-  'preset-claude-global',
-  'preset-agents-global',
-  'preset-opencode-project',
-  'preset-claude-project',
-  'preset-agents-project'
-]
 
 function getStorageItem (key: string, fallbackValue: any) {
   try {
@@ -106,34 +120,26 @@ const directoryConfigs = ref<any[]>([])
 const scannedDirectories = ref<any[]>([])
 const skills = ref<any[]>([])
 const skillKeyword = ref('')
-const statusFilter = ref<'all' | 'enabled' | 'disabled'>('all')
 const selectedDirectoryIds = ref<string[]>([])
+const statusFilter = ref<'all' | 'enabled' | 'disabled'>('all')
 const isLoading = ref(false)
 const errorMessage = ref('')
 const skillSwitchingIds = ref<string[]>([])
 const skillDeletingIds = ref<string[]>([])
 const expandedSkillDescriptionIds = ref<string[]>([])
 const overflowingSkillDescriptionIds = ref<string[]>([])
+const collapsedSkillDescriptions = ref<Record<string, string>>({})
 const skillDescriptionMeasureElements = new Map<string, HTMLElement>()
 const homeDirectory = ref('')
 
 function persistSettings () {
   setStorageItem(STORAGE_KEYS.projectRoot, projectRoot.value)
   setStorageItem(STORAGE_KEYS.directories, directoryConfigs.value)
-  setStorageItem(STORAGE_KEYS.selectedDirectoryIds, selectedDirectoryIds.value)
 }
 
 function loadSettings () {
   projectRoot.value = getStorageItem(STORAGE_KEYS.projectRoot, '')
   directoryConfigs.value = mergeDirectoryConfigs(getStorageItem(STORAGE_KEYS.directories, DEFAULT_DIRECTORY_CONFIGS))
-  const savedSelectedDirectoryIds = getStorageItem(STORAGE_KEYS.selectedDirectoryIds, [])
-  const allDirectoryIds = directoryConfigs.value
-    .filter((directory) => directory.source === 'custom' || projectRoot.value.trim() || !String(directory.id).endsWith('project'))
-    .map((directory) => directory.id)
-
-  selectedDirectoryIds.value = Array.isArray(savedSelectedDirectoryIds) && savedSelectedDirectoryIds.length > 0
-    ? savedSelectedDirectoryIds.filter((id) => allDirectoryIds.includes(id))
-    : allDirectoryIds
 }
 
 function showNotification (message: string) {
@@ -271,6 +277,59 @@ function getDirectoryStateText (directoryId: string) {
   return state.reason || state.resolvedPath || '等待扫描'
 }
 
+function getSkillDescriptionText (skill: any) {
+  if (typeof skill?.description !== 'string') return '暂无说明'
+
+  const description = skill.description.trim()
+  return description || '暂无说明'
+}
+
+function getCollapsedSkillDescription (skill: any) {
+  return collapsedSkillDescriptions.value[skill.id] || getSkillDescriptionText(skill)
+}
+
+function buildCollapsedSkillDescription (element: HTMLElement, description: string) {
+  const lineHeight = Number.parseFloat(window.getComputedStyle(element).lineHeight) || 16.2
+  const maxHeight = lineHeight * DESCRIPTION_PREVIEW_LINE_COUNT + 1
+  const suffix = `... ${DESCRIPTION_EXPAND_LABEL}`
+
+  element.textContent = description
+
+  if (element.scrollHeight <= maxHeight) {
+    return description
+  }
+
+  let low = 0
+  let high = description.length
+  let best = ''
+
+  while (low <= high) {
+    const middle = Math.floor((low + high) / 2)
+    const candidate = description
+      .slice(0, middle)
+      .trimEnd()
+      .replace(/[，。！？；：、,.!?;:\s]+$/g, '')
+    const measuredText = `${candidate || description.slice(0, middle).trimEnd()}${suffix}`
+
+    element.textContent = measuredText
+
+    if (element.scrollHeight <= maxHeight) {
+      best = candidate || description.slice(0, middle).trimEnd()
+      low = middle + 1
+      continue
+    }
+
+    high = middle - 1
+  }
+
+  const fallbackText = description
+    .slice(0, Math.max(1, Math.min(description.length, high)))
+    .trimEnd()
+    .replace(/[，。！？；：、,.!?;:\s]+$/g, '')
+
+  return fallbackText || description.slice(0, 1)
+}
+
 function setSkillDescriptionMeasureRef (skillId: string) {
   return (element: Element | null) => {
     if (element instanceof HTMLElement) {
@@ -285,16 +344,29 @@ function setSkillDescriptionMeasureRef (skillId: string) {
 function syncSkillDescriptionOverflowState () {
   if (currentView.value !== 'list') return
 
+  const nextCollapsedDescriptions: Record<string, string> = {}
   const nextOverflowingIds = filteredSkills.value
     .filter((skill) => {
       const element = skillDescriptionMeasureElements.get(skill.id)
       if (!element) return false
 
+      const description = getSkillDescriptionText(skill)
       const lineHeight = Number.parseFloat(window.getComputedStyle(element).lineHeight) || 16.2
-      return element.scrollHeight > lineHeight * 2 + 1
+      const maxHeight = lineHeight * DESCRIPTION_PREVIEW_LINE_COUNT + 1
+
+      element.textContent = description
+
+      if (element.scrollHeight <= maxHeight) {
+        nextCollapsedDescriptions[skill.id] = description
+        return false
+      }
+
+      nextCollapsedDescriptions[skill.id] = buildCollapsedSkillDescription(element, description)
+      return true
     })
     .map((skill) => skill.id)
 
+  collapsedSkillDescriptions.value = nextCollapsedDescriptions
   overflowingSkillDescriptionIds.value = nextOverflowingIds
   expandedSkillDescriptionIds.value = expandedSkillDescriptionIds.value.filter((id) => nextOverflowingIds.includes(id))
 }
@@ -395,7 +467,6 @@ const filteredSkills = computed(() => {
   const selectedIds = new Set(selectedDirectoryIds.value)
 
   return skills.value.filter((skill) => {
-    if (directoryFilterOptions.value.length > 0 && selectedIds.size === 0) return false
     if (selectedIds.size > 0 && !selectedIds.has(skill.directoryId)) return false
     if (statusFilter.value === 'enabled' && skill.disabled) return false
     if (statusFilter.value === 'disabled' && !skill.disabled) return false
@@ -406,40 +477,13 @@ const filteredSkills = computed(() => {
 })
 
 const healthyDirectoryCount = computed(() => scannedDirectories.value.filter((directory) => !directory.reason).length)
-const directoryFilterOptions = computed(() => {
-  const directoryById = new Map(directoryConfigs.value.map((directory) => [directory.id, directory]))
-  const availableDirectoryIds = new Set(
-    scannedDirectories.value
-      .filter((directory) => directory.exists && !directory.reason)
-      .map((directory) => directory.id)
-  )
-  const options = []
 
-  for (const directoryId of DIRECTORY_FILTER_ORDER) {
-    if (directoryId.endsWith('project') && !projectRoot.value.trim()) continue
-    if (!availableDirectoryIds.has(directoryId)) continue
-
-    const directory = directoryById.get(directoryId)
-    if (!directory) continue
-
-    options.push({
-      id: directory.id,
-      label: getDirectoryDisplayLabel(directory)
-    })
-  }
-
-  for (const directory of directoryConfigs.value) {
-    if (DIRECTORY_FILTER_ORDER.includes(directory.id)) continue
-    if (!availableDirectoryIds.has(directory.id)) continue
-
-    options.push({
-      id: directory.id,
-      label: getDirectoryDisplayLabel(directory)
-    })
-  }
-
-  return options
-})
+const searchableDirectoryOptions = computed(() => scannedDirectories.value
+  .filter((directory) => !directory.reason && directory.totalSkills > 0)
+  .map((directory) => ({
+    value: directory.id,
+    label: `${getDirectoryDisplayLabel(directory)} (${directory.totalSkills})`
+  })))
 
 const directorySections = computed(() => {
   const globalItems = []
@@ -472,16 +516,13 @@ const directorySections = computed(() => {
   ].filter((section) => section.items.length > 0)
 })
 
-watch([projectRoot, directoryConfigs, selectedDirectoryIds], () => {
+watch([projectRoot, directoryConfigs], () => {
   persistSettings()
 }, { deep: true })
 
-watch(() => directoryFilterOptions.value.map((directory) => directory.id), (directoryIds) => {
-  const validSelectedIds = selectedDirectoryIds.value.filter((id) => directoryIds.includes(id))
-
-  if (validSelectedIds.length !== selectedDirectoryIds.value.length) {
-    selectedDirectoryIds.value = validSelectedIds
-  }
+watch(searchableDirectoryOptions, (options) => {
+  const availableIds = new Set(options.map((option) => option.value))
+  selectedDirectoryIds.value = selectedDirectoryIds.value.filter((directoryId) => availableIds.has(directoryId))
 }, { immediate: true })
 
 watch(currentView, () => {
@@ -524,19 +565,7 @@ onBeforeUnmount(() => {
     <Transition name="view-switch" mode="out-in">
       <section v-if="currentView === 'list'" key="list" class="page-shell">
         <section class="hero-toolbar panel-surface panel-animated">
-          <div class="hero-toolbar-top">
-            <div class="page-actions page-actions--compact">
-              <button
-                class="icon-action-button"
-                type="button"
-                title="目录配置"
-                aria-label="目录配置"
-                @click="openSettings"
-              >
-                <el-icon><Setting /></el-icon>
-              </button>
-            </div>
-          </div>
+          <div class="hero-toolbar-top"></div>
 
             <div class="hero-toolbar-bottom">
               <el-input
@@ -549,21 +578,34 @@ onBeforeUnmount(() => {
               <el-select
                 v-model="selectedDirectoryIds"
                 class="toolbar-directory"
+                clearable
                 collapse-tags
                 collapse-tags-tooltip
-                clearable
                 multiple
+                :disabled="searchableDirectoryOptions.length === 0"
+                :max-collapse-tags="2"
+                :offset="8"
                 placeholder="筛选目录"
+                popper-class="toolbar-select-popper"
+                :popper-options="TOOLBAR_SELECT_POPPER_OPTIONS"
+                placement="bottom-start"
               >
                 <el-option
-                  v-for="directory in directoryFilterOptions"
-                  :key="directory.id"
-                  :label="directory.label"
-                  :value="directory.id"
+                  v-for="option in searchableDirectoryOptions"
+                  :key="option.value"
+                  :label="option.label"
+                  :value="option.value"
                 />
               </el-select>
 
-              <el-select v-model="statusFilter" class="toolbar-status">
+              <el-select
+                v-model="statusFilter"
+                class="toolbar-status"
+                :offset="8"
+                popper-class="toolbar-select-popper"
+                :popper-options="TOOLBAR_SELECT_POPPER_OPTIONS"
+                placement="bottom-start"
+              >
                 <el-option
                   v-for="option in STATUS_OPTIONS"
                   :key="option.value"
@@ -585,17 +627,28 @@ onBeforeUnmount(() => {
         />
 
         <section v-loading="isLoading" class="list-panel panel-surface panel-animated">
-          <div class="list-header">
-            <div class="list-heading">
-              <h2>Skills 列表</h2>
-              <p>点击名称打开目录，右侧可快速启停和删除。</p>
-            </div>
+            <div class="list-header">
+              <div class="list-header-top">
+                <div class="list-heading list-heading--inline">
+                  <h2>Skills 列表</h2>
 
-            <div class="list-stats">
-              <el-tag effect="plain">已连接目录 {{ healthyDirectoryCount }}/{{ scannedDirectories.length }}</el-tag>
-              <el-tag effect="plain" type="success">列表结果 {{ filteredSkills.length }}</el-tag>
+                  <div class="list-stats">
+                    <el-tag effect="plain">已连接目录 {{ healthyDirectoryCount }}/{{ scannedDirectories.length }}</el-tag>
+                    <el-tag effect="plain" type="success">列表结果 {{ filteredSkills.length }}</el-tag>
+                  </div>
+                </div>
+
+                <button
+                  class="icon-action-button"
+                  type="button"
+                  title="目录设置"
+                  aria-label="目录设置"
+                  @click="openSettings"
+                >
+                  <el-icon><Setting /></el-icon>
+                </button>
+              </div>
             </div>
-          </div>
 
           <el-empty
             v-if="!isLoading && filteredSkills.length === 0"
@@ -616,46 +669,50 @@ onBeforeUnmount(() => {
                 <div class="skill-top">
                   <div class="skill-main">
                     <div class="skill-title-row">
-                      <el-button
-                        class="skill-open-button"
-                        :title="skill.skillDirPath"
-                        link
-                        type="primary"
-                        @click="openSkillDirectory(skill)"
-                      >
-                        <span class="skill-name">{{ skill.name }}</span>
-                      </el-button>
-                      <el-tag effect="light" size="small" :type="skill.disabled ? 'danger' : 'success'">
-                        {{ skill.disabled ? '禁用' : '启用' }}
-                      </el-tag>
+                      <div class="skill-title-main">
+                        <el-button
+                          class="skill-open-button"
+                          :title="skill.skillDirPath"
+                          link
+                          type="primary"
+                          @click="openSkillDirectory(skill)"
+                        >
+                          <span class="skill-name">{{ skill.name }}</span>
+                        </el-button>
+                        <el-tag effect="light" size="small" :type="skill.disabled ? 'danger' : 'success'">
+                          {{ skill.disabled ? '禁用' : '启用' }}
+                        </el-tag>
+                      </div>
+
+                      <div class="skill-actions">
+                        <el-switch
+                          :disabled="isSkillDeleting(skill.id)"
+                          :loading="isSkillSwitching(skill.id)"
+                          :model-value="!skill.disabled"
+                          active-text="启"
+                          inactive-text="停"
+                          inline-prompt
+                          @change="toggleSkillDisabled(skill)"
+                        />
+
+                        <el-button
+                          :aria-label="`删除 ${skill.name}`"
+                          :disabled="isSkillSwitching(skill.id) || isSkillDeleting(skill.id)"
+                          :icon="Delete"
+                          :loading="isSkillDeleting(skill.id)"
+                          circle
+                          plain
+                          title="删除"
+                          type="danger"
+                          @click="removeSkill(skill)"
+                        />
+                      </div>
                     </div>
 
                     <div class="skill-meta-row">
                       <el-tag effect="plain" size="small">{{ skill.directoryLabel || '未知目录' }}</el-tag>
                       <span class="skill-path" :title="getSkillDisplayPath(skill)">{{ getSkillDisplayPath(skill) }}</span>
                     </div>
-                  </div>
-
-                  <div class="skill-actions">
-                    <el-switch
-                      :disabled="isSkillDeleting(skill.id)"
-                      :loading="isSkillSwitching(skill.id)"
-                      :model-value="!skill.disabled"
-                      active-text="启"
-                      inactive-text="停"
-                      inline-prompt
-                      @change="toggleSkillDisabled(skill)"
-                    />
-
-                    <el-button
-                      :disabled="isSkillSwitching(skill.id) || isSkillDeleting(skill.id)"
-                      :loading="isSkillDeleting(skill.id)"
-                      plain
-                      type="danger"
-                      @click="removeSkill(skill)"
-                    >
-                      删除
-                    </el-button>
                   </div>
                 </div>
 
@@ -665,22 +722,25 @@ onBeforeUnmount(() => {
                       :ref="setSkillDescriptionMeasureRef(skill.id)"
                       class="skill-description skill-description--measure"
                     >
-                      {{ skill.description }}
+                      {{ getSkillDescriptionText(skill) }}
                     </span>
 
-                    <p :class="['skill-description', { expanded: isSkillDescriptionExpanded(skill.id) }]">
-                      {{ skill.description || '暂无说明' }}
+                    <p class="skill-description">
+                      <span>
+                        {{ isSkillDescriptionExpanded(skill.id) ? getSkillDescriptionText(skill) : getCollapsedSkillDescription(skill) }}
+                      </span>
+
+                      <el-button
+                        v-if="shouldShowSkillDescriptionToggle(skill.id)"
+                        class="skill-description-toggle"
+                        link
+                        type="primary"
+                        @click="toggleSkillDescriptionExpansion(skill.id)"
+                      >
+                        {{ isSkillDescriptionExpanded(skill.id) ? DESCRIPTION_COLLAPSE_LABEL : DESCRIPTION_EXPAND_LABEL }}
+                      </el-button>
                     </p>
                   </div>
-
-                  <el-button
-                    v-if="shouldShowSkillDescriptionToggle(skill.id)"
-                    link
-                    type="primary"
-                    @click="toggleSkillDescriptionExpansion(skill.id)"
-                  >
-                    {{ isSkillDescriptionExpanded(skill.id) ? '收起' : '查看更多' }}
-                  </el-button>
                 </div>
               </el-card>
             </div>
@@ -690,6 +750,16 @@ onBeforeUnmount(() => {
 
       <section v-else key="settings" class="page-shell">
         <section class="settings-topbar panel-surface panel-animated">
+          <button
+            class="icon-action-button settings-back-button"
+            type="button"
+            title="返回列表"
+            aria-label="返回列表"
+            @click="closeSettings"
+          >
+            <el-icon><Back /></el-icon>
+          </button>
+
           <div class="settings-copy">
             <span class="page-kicker">目录维护</span>
             <h2>目录配置</h2>
@@ -699,7 +769,6 @@ onBeforeUnmount(() => {
           <div class="settings-actions">
             <el-button plain @click="resetDefaultDirectories">重置默认</el-button>
             <el-button :loading="isLoading" type="primary" @click="refreshSkills">立即扫描</el-button>
-            <el-button @click="closeSettings">返回列表</el-button>
           </div>
         </section>
 
@@ -710,9 +779,7 @@ onBeforeUnmount(() => {
                 <div class="settings-summary-header">
                   <div>
                     <h3>扫描范围</h3>
-                    <p>路径支持 `~` 和 `${projectRoot}` 占位符。</p>
                   </div>
-                  <el-tag effect="plain">{{ directoryConfigs.length }} 个目录</el-tag>
                 </div>
 
                 <div class="settings-summary-grid">
@@ -731,21 +798,6 @@ onBeforeUnmount(() => {
                 </div>
               </section>
 
-              <section class="project-root-panel">
-                <div class="project-root-copy">
-                  <div>
-                    <h3>项目根目录</h3>
-                    <p>用于解析 ${projectRoot} 占位符</p>
-                  </div>
-                  <el-button type="primary" plain @click="browseProjectRoot">选择</el-button>
-                </div>
-
-                <el-input
-                  v-model="projectRoot"
-                  placeholder="用于解析 ${projectRoot} 占位符"
-                />
-              </section>
-
               <div class="directory-groups">
                 <section
                   v-for="(section, sectionIndex) in directorySections"
@@ -753,52 +805,67 @@ onBeforeUnmount(() => {
                   :style="{ '--section-index': sectionIndex }"
                   class="directory-section"
                 >
-                  <div class="directory-section-header">
-                    <div class="directory-section-copy">
-                      <h3>{{ section.title }}</h3>
-                      <p>路径支持 `~` 和 `${projectRoot}` 占位符。</p>
+                    <div class="directory-section-header">
+                      <div class="directory-section-copy">
+                        <h3>{{ section.title }}</h3>
+                      </div>
                     </div>
-                    <el-tag effect="plain" size="small">{{ section.items.length }} 个目录</el-tag>
-                  </div>
 
-                  <div class="directory-list">
-                    <el-card
-                      v-for="(directory, directoryIndex) in section.items"
-                      :key="directory.id"
-                      :style="{ '--item-index': directoryIndex }"
-                      class="directory-card"
-                      shadow="never"
-                    >
-                      <div class="directory-card-header">
-                        <div class="directory-card-meta">
-                          <span class="directory-name">{{ getDirectoryDisplayLabel(directory) }}</span>
-                          <el-tag effect="plain" size="small" type="info">
-                            {{ getDirectoryScanState(directory.id)?.totalSkills || 0 }} 个 skill
-                          </el-tag>
+                  <div class="directory-section-body">
+                    <section v-if="section.key === 'project'" class="project-root-panel project-root-panel--embedded">
+                      <div class="project-root-copy">
+                        <div>
+                          <h3>项目技能根目录配置</h3>
+                          <p>用于解析项目路径里的 ${projectRoot} 占位符</p>
                         </div>
-
-                        <div class="directory-card-actions">
-                          <el-button plain @click="browseDirectoryConfig(directory)">选择</el-button>
-                          <el-button
-                            v-if="directory.source === 'custom'"
-                            plain
-                            type="danger"
-                            @click="removeDirectoryConfig(directory.id)"
-                          >
-                            删除
-                          </el-button>
-                        </div>
+                        <el-button type="primary" plain @click="browseProjectRoot">选择</el-button>
                       </div>
 
                       <el-input
-                        v-model="directory.path"
-                        placeholder="支持 ~ 和 ${projectRoot}"
+                        v-model="projectRoot"
+                        placeholder="用于解析项目路径里的 ${projectRoot} 占位符"
                       />
+                    </section>
 
-                      <p class="directory-state">
-                        {{ getDirectoryStateText(directory.id) || '项目路径未启用，设置项目根目录后自动生效' }}
-                      </p>
-                    </el-card>
+                    <div class="directory-list">
+                      <el-card
+                        v-for="(directory, directoryIndex) in section.items"
+                        :key="directory.id"
+                        :style="{ '--item-index': directoryIndex }"
+                        class="directory-card"
+                        shadow="never"
+                      >
+                        <div class="directory-card-header">
+                          <div class="directory-card-meta">
+                            <span class="directory-name">{{ getDirectoryDisplayLabel(directory) }}</span>
+                            <el-tag effect="plain" size="small" type="info">
+                              {{ getDirectoryScanState(directory.id)?.totalSkills || 0 }} 个 skill
+                            </el-tag>
+                          </div>
+
+                          <div class="directory-card-actions">
+                            <el-button plain @click="browseDirectoryConfig(directory)">选择</el-button>
+                            <el-button
+                              v-if="directory.source === 'custom'"
+                              plain
+                              type="danger"
+                              @click="removeDirectoryConfig(directory.id)"
+                            >
+                              删除
+                            </el-button>
+                          </div>
+                        </div>
+
+                        <el-input
+                          v-model="directory.path"
+                          placeholder="支持 ~ 和 ${projectRoot}"
+                        />
+
+                        <p class="directory-state">
+                          {{ getDirectoryStateText(directory.id) || '项目路径未启用，设置项目根目录后自动生效' }}
+                        </p>
+                      </el-card>
+                    </div>
                   </div>
                 </section>
               </div>
@@ -845,7 +912,23 @@ onBeforeUnmount(() => {
 
 .hero-toolbar {
   position: relative;
-  overflow: hidden;
+  overflow: visible;
+  z-index: 3;
+}
+
+.settings-topbar {
+  position: relative;
+  display: grid;
+  gap: 12px;
+  align-items: stretch;
+  padding-right: 68px;
+}
+
+.settings-back-button {
+  position: absolute;
+  top: 14px;
+  right: 16px;
+  z-index: 1;
 }
 
 .hero-toolbar::before {
@@ -861,6 +944,7 @@ onBeforeUnmount(() => {
 .hero-toolbar-top,
 .hero-title-row,
 .list-header,
+.list-header-top,
 .settings-topbar,
 .settings-summary-header,
 .project-root-copy,
@@ -876,7 +960,7 @@ onBeforeUnmount(() => {
 }
 
 .hero-toolbar-top,
-.list-header,
+.list-header-top,
 .settings-topbar,
 .settings-summary-header,
 .project-root-copy,
@@ -981,10 +1065,15 @@ onBeforeUnmount(() => {
 .skill-actions,
 .directory-card-actions,
 .settings-actions,
-.settings-summary-grid {
+.settings-summary-grid,
+.list-header-actions {
   display: flex;
   gap: 10px;
   flex-wrap: wrap;
+}
+
+.list-header-actions {
+  align-items: center;
 }
 
 .page-actions--compact {
@@ -992,6 +1081,13 @@ onBeforeUnmount(() => {
   z-index: 1;
   flex-shrink: 0;
   align-self: flex-start;
+}
+
+.list-heading--inline {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
 }
 
 .icon-action-button {
@@ -1029,7 +1125,7 @@ onBeforeUnmount(() => {
 
 .hero-toolbar-bottom {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 0.5fr) minmax(0, 0.5fr) auto;
+  grid-template-columns: minmax(0, 1.2fr) minmax(220px, 0.9fr) minmax(180px, 0.5fr) auto;
   gap: 10px;
   align-items: center;
   position: relative;
@@ -1050,14 +1146,21 @@ onBeforeUnmount(() => {
   gap: 12px;
   padding: 14px 16px;
   overflow: hidden;
+  z-index: 1;
 }
 
 .list-header {
-  align-items: flex-end;
+  align-items: stretch;
+  flex-direction: column;
+}
+
+.list-header-top {
+  align-items: center;
 }
 
 .list-stats {
-  justify-content: flex-end;
+  justify-content: flex-start;
+  flex-wrap: nowrap;
 }
 
 .skills-scrollbar,
@@ -1074,6 +1177,7 @@ onBeforeUnmount(() => {
 .skills-list,
 .settings-layout,
 .directory-groups,
+.directory-section-body,
 .directory-list {
   display: grid;
   gap: 10px;
@@ -1157,21 +1261,27 @@ onBeforeUnmount(() => {
   animation-delay: calc(var(--section-index, 0) * 0.04s);
 }
 
-.directory-list {
-  margin-top: 12px;
-}
-
 .directory-card {
   animation: item-in 0.28s cubic-bezier(0.22, 1, 0.36, 1) both;
   animation-delay: calc(var(--item-index, 0) * 0.03s);
 }
 
 .skill-title-row,
+.skill-title-main,
 .directory-card-meta {
   display: flex;
   gap: 10px;
   align-items: center;
   min-width: 0;
+}
+
+.skill-title-row {
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+
+.skill-title-main {
+  flex: 1;
 }
 
 .skill-meta-row {
@@ -1181,6 +1291,7 @@ onBeforeUnmount(() => {
 
 .skill-open-button {
   padding: 0;
+  min-width: 0;
 }
 
 .skill-name {
@@ -1203,6 +1314,7 @@ onBeforeUnmount(() => {
 }
 
 .skill-actions {
+  margin-left: auto;
   flex-shrink: 0;
 }
 
@@ -1222,20 +1334,16 @@ onBeforeUnmount(() => {
   color: var(--text-soft);
   font-size: 13px;
   line-height: 1.5;
-  display: -webkit-box;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: normal;
+  display: block;
   word-break: break-word;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
 }
 
-.skill-description.expanded {
-  display: block;
-  overflow: visible;
-  text-overflow: clip;
-  -webkit-line-clamp: unset;
+.skill-description-toggle {
+  display: inline-flex;
+  min-height: auto;
+  margin-left: 4px;
+  padding: 0;
+  vertical-align: baseline;
 }
 
 .skill-description--measure {
@@ -1246,6 +1354,7 @@ onBeforeUnmount(() => {
   pointer-events: none;
   overflow: visible;
   text-overflow: clip;
+  white-space: normal;
 }
 
 .directory-name {
@@ -1271,6 +1380,10 @@ onBeforeUnmount(() => {
 .hero-toolbar :deep(.el-select__tags),
 .hero-toolbar :deep(.el-select__tags-text) {
   max-width: 100%;
+}
+
+.skill-manager :deep(.toolbar-select-popper .el-select-dropdown__item) {
+  font-size: 12px;
 }
 
 .view-switch-enter-active,
@@ -1316,7 +1429,7 @@ onBeforeUnmount(() => {
   }
 
   .hero-toolbar-bottom {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 0.5fr) minmax(0, 0.5fr) auto;
+    grid-template-columns: minmax(0, 1fr) minmax(220px, 0.8fr) minmax(180px, 0.5fr) auto;
   }
 
   .list-header,
@@ -1337,6 +1450,19 @@ onBeforeUnmount(() => {
   .directory-card-actions,
   .skill-actions {
     justify-content: flex-start;
+  }
+
+  .list-header-top {
+    flex-direction: row;
+    align-items: center;
+  }
+
+  .list-heading--inline {
+    flex-wrap: wrap;
+  }
+
+  .list-stats {
+    flex-wrap: wrap;
   }
 }
 
