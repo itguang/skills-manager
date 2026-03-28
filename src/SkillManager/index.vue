@@ -85,6 +85,12 @@ const DEFAULT_DIRECTORY_CONFIGS = [
 ]
 
 const DEFAULT_DIRECTORY_LABELS = new Map(DEFAULT_DIRECTORY_CONFIGS.map((item) => [item.id, item.label]))
+const PROJECT_DISPLAY_ONLY_DIRECTORY_IDS = new Set([
+  'preset-opencode-project',
+  'preset-claude-project',
+  'preset-codex-project',
+  'preset-agents-project'
+])
 
 function getStorageItem (key: string, fallbackValue: any) {
   try {
@@ -96,7 +102,22 @@ function getStorageItem (key: string, fallbackValue: any) {
 }
 
 function setStorageItem (key: string, value: any) {
-  window.utools.dbStorage.setItem(key, value)
+  let safeValue = value
+
+  if (value && typeof value === 'object') {
+    try {
+      safeValue = JSON.parse(JSON.stringify(value))
+    } catch (error) {
+      safeValue = null
+    }
+  }
+
+  window.utools.dbStorage.setItem(key, safeValue)
+}
+
+function removeStorageItem (key: string) {
+  if (typeof window.utools.dbStorage.removeItem !== 'function') return
+  window.utools.dbStorage.removeItem(key)
 }
 
 function mergeDirectoryConfigs (savedConfigs: any[]) {
@@ -130,12 +151,18 @@ const skillDescriptionMeasureElements = new Map<string, HTMLElement>()
 const homeDirectory = ref('')
 
 function persistSettings () {
-  setStorageItem(STORAGE_KEYS.projectRoot, projectRoot.value)
+  const normalizedProjectRoot = typeof projectRoot.value === 'string' ? projectRoot.value.trim() : ''
+  if (normalizedProjectRoot) {
+    setStorageItem(STORAGE_KEYS.projectRoot, normalizedProjectRoot)
+  } else {
+    removeStorageItem(STORAGE_KEYS.projectRoot)
+  }
   setStorageItem(STORAGE_KEYS.directories, directoryConfigs.value)
 }
 
 function loadSettings () {
-  projectRoot.value = getStorageItem(STORAGE_KEYS.projectRoot, '')
+  const savedProjectRoot = getStorageItem(STORAGE_KEYS.projectRoot, '')
+  projectRoot.value = typeof savedProjectRoot === 'string' ? savedProjectRoot : ''
   directoryConfigs.value = mergeDirectoryConfigs(getStorageItem(STORAGE_KEYS.directories, DEFAULT_DIRECTORY_CONFIGS))
 }
 
@@ -232,15 +259,51 @@ function resetDefaultDirectories () {
   showNotification('已恢复默认目录配置')
 }
 
+function extractDialogDirectoryPath (result: any) {
+  // 处理 undefined 或 null
+  if (!result) return ''
+
+  // 处理 Electron/uTools 可能返回的对象格式 { canceled: boolean, filePaths: string[] }
+  if (typeof result === 'object' && !Array.isArray(result)) {
+    if (Array.isArray(result.filePaths) && result.filePaths.length > 0) {
+      return result.filePaths[0]
+    }
+    // 处理可能的其他对象格式
+    if (typeof result.path === 'string') return result.path
+    if (typeof result.filePath === 'string') return result.filePath
+    return ''
+  }
+
+  // 处理字符串数组格式
+  if (!Array.isArray(result) || result.length === 0) return ''
+
+  const first = result[0]
+
+  if (typeof first === 'string') {
+    return first
+  }
+
+  if (first && typeof first === 'object') {
+    if (typeof first.path === 'string') return first.path
+    if (typeof first.filePath === 'string') return first.filePath
+  }
+
+  return ''
+}
+
 function browseProjectRoot () {
   const directories = window.utools.showOpenDialog({
     title: '选择项目根目录',
     properties: ['openDirectory']
   })
 
-  if (!directories || directories.length === 0) return
+  const selectedPath = extractDialogDirectoryPath(directories)
+  if (!selectedPath) return
+  projectRoot.value = selectedPath
+}
 
-  projectRoot.value = directories[0]
+function clearProjectRoot () {
+  projectRoot.value = ''
 }
 
 function browseDirectoryConfig (directory: any) {
@@ -249,9 +312,22 @@ function browseDirectoryConfig (directory: any) {
     properties: ['openDirectory']
   })
 
-  if (!directories || directories.length === 0) return
+  const selectedPath = extractDialogDirectoryPath(directories)
+  if (!selectedPath) return
+  directory.path = selectedPath
+}
 
-  directory.path = directories[0]
+function isProjectDisplayOnlyDirectory (directory: any) {
+  return PROJECT_DISPLAY_ONLY_DIRECTORY_IDS.has(directory?.id)
+}
+
+function getProjectDirectoryResolvedPath (directory: any) {
+  const rawPath = typeof directory?.path === 'string' ? directory.path : ''
+  const normalizedProjectRoot = typeof projectRoot.value === 'string' ? projectRoot.value.trim() : ''
+
+  if (!isProjectDisplayOnlyDirectory(directory)) return rawPath
+  if (!normalizedProjectRoot) return rawPath
+  return rawPath.replaceAll('${projectRoot}', normalizedProjectRoot)
 }
 
 function getDirectoryScanState (directoryId: string) {
@@ -493,9 +569,17 @@ const directorySections = computed(() => {
     }
   }
 
+  const sharedGlobalIndex = globalItems.findIndex((directory) =>
+    directory?.id === 'preset-agents-global' || directory?.label === '全局共享技能'
+  )
+  if (sharedGlobalIndex > 0) {
+    const [sharedGlobalItem] = globalItems.splice(sharedGlobalIndex, 1)
+    globalItems.unshift(sharedGlobalItem)
+  }
+
   return [
-    { key: 'global', title: '全局路径配置', items: globalItems },
-    { key: 'project', title: '项目路径配置', items: projectItems }
+    { key: 'global', title: '全局 Skill 路径配置', items: globalItems },
+    { key: 'project', title: '项目 Skill 配置', items: projectItems }
   ].filter((section) => section.items.length > 0)
 })
 
@@ -801,13 +885,18 @@ onBeforeUnmount(() => {
                           <h3>项目技能根目录配置</h3>
                           <p>用于解析项目路径里的 ${projectRoot} 占位符</p>
                         </div>
-                        <el-button type="primary" plain @click="browseProjectRoot">选择</el-button>
                       </div>
 
-                      <el-input
-                        v-model="projectRoot"
-                        placeholder="用于解析项目路径里的 ${projectRoot} 占位符"
-                      />
+                      <div class="project-root-input-row">
+                        <el-input
+                          v-model="projectRoot"
+                          placeholder="用于解析项目路径里的 ${projectRoot} 占位符"
+                        />
+                        <div class="project-root-input-actions">
+                          <el-button type="primary" plain @click="browseProjectRoot">选择</el-button>
+                          <el-button plain @click="clearProjectRoot">清空</el-button>
+                        </div>
+                      </div>
                     </section>
 
                     <div class="directory-list">
@@ -826,14 +915,21 @@ onBeforeUnmount(() => {
                             </el-tag>
                           </div>
 
-                          <div class="directory-card-actions">
+                          <div v-if="!isProjectDisplayOnlyDirectory(directory)" class="directory-card-actions">
                             <el-button plain @click="browseDirectoryConfig(directory)">选择</el-button>
                           </div>
                         </div>
 
                         <el-input
+                          v-if="!isProjectDisplayOnlyDirectory(directory)"
                           v-model="directory.path"
                           placeholder="支持 ~ 和 ${projectRoot}"
+                        />
+                        <el-input
+                          v-else
+                          :model-value="getProjectDirectoryResolvedPath(directory)"
+                          placeholder="支持 ~ 和 ${projectRoot}"
+                          readonly
                         />
 
                         <p class="directory-state">
@@ -1047,6 +1143,19 @@ onBeforeUnmount(() => {
   flex-wrap: wrap;
 }
 
+.project-root-input-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.project-root-input-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
 .list-header-actions {
   align-items: center;
 }
@@ -1204,6 +1313,7 @@ onBeforeUnmount(() => {
 .skill-card {
   animation: item-in 0.28s cubic-bezier(0.22, 1, 0.36, 1) both;
   animation-delay: calc(var(--item-index, 0) * 0.03s);
+  overflow: hidden;
 }
 
 .skill-card.is-disabled {
@@ -1214,7 +1324,8 @@ onBeforeUnmount(() => {
 .directory-card :deep(.el-card__body) {
   display: grid;
   gap: 10px;
-  padding: 12px 16px;
+  padding: 10px 16px 12px;
+  overflow: hidden;
 }
 
 .settings-summary-card,
@@ -1303,8 +1414,10 @@ onBeforeUnmount(() => {
 
 .skill-description-box {
   position: relative;
-  flex: 1;
+  flex: 0 0 90%;
   min-width: 0;
+  width: 90%;
+  max-width: 90%;
 }
 
 .skill-description {
@@ -1461,6 +1574,11 @@ onBeforeUnmount(() => {
 
   .hero-toolbar-bottom {
     grid-template-columns: 1fr;
+  }
+
+  .project-root-input-row {
+    grid-template-columns: 1fr;
+    align-items: stretch;
   }
 
   .settings-summary-grid {
