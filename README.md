@@ -14,8 +14,9 @@
 </div>
 
 <blockquote>
-一个强大且美观的 uTools 插件，用于可视化管理本地已安装的 GenX Skills，提供便捷的目录配置、技能浏览和快速启动功能。
+一个强大且美观的 uTools 插件，用于可视化管理本地已安装的 Agent（Claude，Codex，Opencode 等） Skills，提供便捷的目录配置、技能浏览和快速启动功能。
 </blockquote>
+
 
 ---
 
@@ -216,3 +217,10 @@ skills-manager/
 Made with ❤️ by the Skills Manager Team
 
 </div>
+
+用 frontend-design 帮我重做这个项目的排版。
+技术栈: Vue 3 + Element Plus
+用途: 一款utools 插件，用来管理本地安装的skills
+风格: 排版简洁紧凑，操作简单
+要求: 保留现有的逻辑和文案，加入有节制的入场动画
+输出: 直接改当前项目代码

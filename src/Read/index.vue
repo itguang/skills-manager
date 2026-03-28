@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import { ref, watch } from 'vue';
+import { ref, watch } from 'vue'
 
 const props = defineProps({
   enterAction: {
@@ -8,96 +8,110 @@ const props = defineProps({
   }
 })
 
-
 const filePath = ref('')
 const fileContent = ref('')
 const error = ref('')
 
-const handleOpenDialog = () => {
-  // 通过 uTools 的 api 打开文件选择窗口
-  const files = window.utools.showOpenDialog({
-    title: '选择文件',
-    properties: ['openFile']
-  })
-  if (!files) return
-  const _filePath = files[0]
-  filePath.value = _filePath
+function loadFile (targetPath: string) {
+  filePath.value = targetPath
+
   try {
-    const content = window.services.readFile(_filePath)
-    fileContent.value = content
-  } catch (err) {
-    error.value = err.message
+    error.value = ''
+    fileContent.value = window.services.readFile(targetPath)
+  } catch (err: any) {
+    error.value = err?.message || '读取文件失败'
     fileContent.value = ''
   }
 }
 
-watch(() => props.enterAction, (enterAction) => {
-  if (enterAction.type === "files") {
-    // 匹配文件进入，直接读取文件
-    const _filePath = enterAction.payload[0].path;
+function handleOpenDialog () {
+  const files = window.utools.showOpenDialog({
+    title: '选择文件',
+    properties: ['openFile']
+  })
 
-    filePath.value = _filePath
-    try {
-      const content = window.services.readFile(_filePath);
-      fileContent.value = content
-    } catch (err) {
-      error.value = err.message
-      fileContent.value = ''
-    }
+  if (!files || files.length === 0) return
+
+  loadFile(files[0])
+}
+
+watch(() => props.enterAction, (enterAction: any) => {
+  if (enterAction?.type === 'files' && enterAction?.payload?.[0]?.path) {
+    loadFile(enterAction.payload[0].path)
   }
 }, {
   immediate: true
 })
-
 </script>
 
 <template>
-  <div class="read">
-    <button @click="handleOpenDialog">选择文件</button>
-    <div class="read-file">{{ filePath }}</div>
-    <template v-if="!!fileContent">
-      <pre>
-        {{ fileContent }}
-      </pre>
-    </template>
-    <template v-if="!!error">
-      <div class="read-error">
-        {{ error }}
+  <div class="read-page">
+    <section class="read-shell">
+      <div class="read-actions">
+        <el-button type="primary" @click="handleOpenDialog">选择文件</el-button>
+        <span v-if="filePath" class="read-file">{{ filePath }}</span>
       </div>
-    </template>
+
+      <el-alert
+        v-if="error"
+        :closable="false"
+        :title="error"
+        show-icon
+        type="error"
+      />
+
+      <el-empty
+        v-else-if="!fileContent"
+        description="选择一个文件后在这里查看内容"
+      />
+
+      <el-card v-else class="read-content-card" shadow="never">
+        <pre>{{ fileContent }}</pre>
+      </el-card>
+    </section>
   </div>
 </template>
 
-<style>
-.read {
+<style scoped>
+.read-page {
+  height: 100%;
   padding: 20px;
-  box-sizing: border-box;
 }
 
-.read>pre {
-  background-color: #fff;
-  width: 100%;
-  overflow: hidden;
-  padding: 20px;
-  box-sizing: border-box;
-  border-radius: 7px;
-  margin-top: 20px;
-  white-space: break-spaces;
+.read-shell {
+  display: grid;
+  gap: 16px;
+  height: 100%;
+}
+
+.read-actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
 }
 
 .read-file {
-  width: 100%;
-  margin-top: 20px;
-  font-weight: bold;
+  min-width: 0;
+  color: var(--text-soft);
+  font-size: 13px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.read-error {
-  color: red;
+.read-content-card {
+  min-height: 0;
 }
 
-@media (prefers-color-scheme: dark) {
-  .read>pre {
-    background-color: #424242;
-  }
+.read-content-card :deep(.el-card__body) {
+  max-height: calc(100vh - 180px);
+  overflow: auto;
+}
+
+pre {
+  margin: 0;
+  white-space: break-spaces;
+  word-break: break-word;
 }
 </style>

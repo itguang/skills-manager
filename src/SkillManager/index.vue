@@ -16,6 +16,12 @@ const STORAGE_KEYS = {
 
 const PAGE_HEIGHT = 544
 
+const STATUS_OPTIONS = [
+  { value: 'all', label: '全部状态' },
+  { value: 'enabled', label: '仅启用' },
+  { value: 'disabled', label: '仅禁用' }
+]
+
 const DEFAULT_DIRECTORY_CONFIGS = [
   {
     id: 'preset-opencode-project',
@@ -99,9 +105,8 @@ const directoryConfigs = ref<any[]>([])
 const scannedDirectories = ref<any[]>([])
 const skills = ref<any[]>([])
 const skillKeyword = ref('')
-const statusFilter = ref('all')
+const statusFilter = ref<'all' | 'enabled' | 'disabled'>('all')
 const selectedDirectoryIds = ref<string[]>([])
-const isDirectoryMenuOpen = ref(false)
 const isLoading = ref(false)
 const errorMessage = ref('')
 const skillSwitchingIds = ref<string[]>([])
@@ -110,7 +115,6 @@ const expandedSkillDescriptionIds = ref<string[]>([])
 const overflowingSkillDescriptionIds = ref<string[]>([])
 const skillDescriptionMeasureElements = new Map<string, HTMLElement>()
 const homeDirectory = ref('')
-const directoryFilterRef = ref<HTMLElement | null>(null)
 
 function persistSettings () {
   setStorageItem(STORAGE_KEYS.projectRoot, projectRoot.value)
@@ -266,30 +270,6 @@ function getDirectoryStateText (directoryId: string) {
   return state.reason || state.resolvedPath || '等待扫描'
 }
 
-function isDirectorySelected (directoryId: string) {
-  return selectedDirectoryIds.value.includes(directoryId)
-}
-
-function toggleDirectorySelection (directoryId: string) {
-  if (selectedDirectoryIds.value.includes(directoryId)) {
-    selectedDirectoryIds.value = selectedDirectoryIds.value.filter((id) => id !== directoryId)
-    return
-  }
-
-  selectedDirectoryIds.value = [...selectedDirectoryIds.value, directoryId]
-}
-
-function toggleDirectoryMenu () {
-  isDirectoryMenuOpen.value = !isDirectoryMenuOpen.value
-}
-
-function handleDocumentPointerDown (event: Event) {
-  const dropdownElement = directoryFilterRef.value
-  if (!dropdownElement) return
-  if (dropdownElement.contains(event.target as Node)) return
-  isDirectoryMenuOpen.value = false
-}
-
 function setSkillDescriptionMeasureRef (skillId: string) {
   return (element: Element | null) => {
     if (element instanceof HTMLElement) {
@@ -374,8 +354,20 @@ async function toggleSkillDisabled (skill: any) {
 async function removeSkill (skill: any) {
   if (!skill?.id || !skill?.skillDirPath || isSkillDeleting(skill.id) || isSkillSwitching(skill.id)) return
 
-  const confirmed = window.confirm(`确认删除 skill「${skill.name}」目录吗？\n\n${skill.skillDirPath}`)
-  if (!confirmed) return
+  try {
+    await ElMessageBox.confirm(
+      `确认删除 skill「${skill.name}」目录吗？\n${skill.skillDirPath}`,
+      '删除 Skill',
+      {
+        type: 'warning',
+        confirmButtonText: '删除',
+        cancelButtonText: '取消',
+        confirmButtonClass: 'el-button--danger'
+      }
+    )
+  } catch (error) {
+    return
+  }
 
   skillDeletingIds.value = [...skillDeletingIds.value, skill.id]
 
@@ -447,14 +439,19 @@ const directoryFilterOptions = computed(() => {
 
   return options
 })
-const selectedDirectoryText = computed(() => {
-  if (directoryFilterOptions.value.length === 0) return '全部目录'
+
+const directorySummaryText = computed(() => {
+  if (directoryFilterOptions.value.length === 0) return '未发现可筛选目录'
   if (selectedDirectoryIds.value.length === directoryFilterOptions.value.length) {
-    return `全部目录 (${directoryFilterOptions.value.length})`
+    return `目录范围：全部 ${directoryFilterOptions.value.length} 个`
   }
-  if (selectedDirectoryIds.value.length === 0) return '未选目录'
-  return `已选目录 (${selectedDirectoryIds.value.length})`
+  if (selectedDirectoryIds.value.length === 0) return '目录范围：未选择'
+  return `目录范围：已选 ${selectedDirectoryIds.value.length} 个`
 })
+
+const enabledSkillCount = computed(() => filteredSkills.value.filter((skill) => !skill.disabled).length)
+const disabledSkillCount = computed(() => filteredSkills.value.filter((skill) => skill.disabled).length)
+
 const directorySections = computed(() => {
   const globalItems = []
   const projectItems = []
@@ -526,12 +523,10 @@ onMounted(() => {
   loadSettings()
   refreshSkills()
   window.addEventListener('resize', handleWindowResize)
-  document.addEventListener('pointerdown', handleDocumentPointerDown)
 })
 
 onBeforeUnmount(() => {
   window.removeEventListener('resize', handleWindowResize)
-  document.removeEventListener('pointerdown', handleDocumentPointerDown)
 })
 </script>
 
@@ -539,221 +534,311 @@ onBeforeUnmount(() => {
   <div class="skill-manager">
     <Transition name="view-switch" mode="out-in">
       <section v-if="currentView === 'list'" key="list" class="page-shell">
-        <section class="toolbar-card">
-          <label class="search-field">
-            <input v-model="skillKeyword" type="text" placeholder="搜索 skill 名称、描述或来源目录" />
-          </label>
+        <section class="hero-toolbar panel-surface panel-animated">
+          <div class="hero-toolbar-top">
+            <div class="page-copy page-copy--compact">
+              <div class="hero-title-row">
+                <span class="page-kicker">本地 skills</span>
+                <h1>Skill 管理</h1>
+                <p>支持名称、描述、目录路径联合检索</p>
+              </div>
+            </div>
 
-          <div ref="directoryFilterRef" class="directory-filter">
-            <button class="directory-filter-trigger" type="button" @click="toggleDirectoryMenu">
-              <span>{{ selectedDirectoryText }}</span>
-              <span class="directory-filter-caret" aria-hidden="true">
-                <svg viewBox="0 0 16 16">
-                  <path d="M4.47 6.97a.75.75 0 0 1 1.06 0L8 9.44l2.47-2.47a.75.75 0 1 1 1.06 1.06l-3 3a.75.75 0 0 1-1.06 0l-3-3a.75.75 0 0 1 0-1.06Z" fill="currentColor" />
-                </svg>
-              </span>
-            </button>
+            <div class="stats-strip stats-strip--compact">
+              <article class="stat-chip">
+                <span class="stat-chip-label">已连接目录</span>
+                <strong>{{ healthyDirectoryCount }}/{{ scannedDirectories.length }}</strong>
+              </article>
+              <article class="stat-chip">
+                <span class="stat-chip-label">列表结果</span>
+                <strong>{{ filteredSkills.length }}</strong>
+              </article>
+              <article class="stat-chip">
+                <span class="stat-chip-label">启用</span>
+                <strong>{{ enabledSkillCount }}</strong>
+              </article>
+              <article class="stat-chip">
+                <span class="stat-chip-label">禁用</span>
+                <strong>{{ disabledSkillCount }}</strong>
+              </article>
+            </div>
 
-            <div v-if="isDirectoryMenuOpen" class="directory-filter-menu">
-              <label
+            <div class="page-actions page-actions--compact">
+              <el-button plain @click="openSettings">目录配置</el-button>
+              <el-button :loading="isLoading" type="primary" @click="refreshSkills">查询</el-button>
+            </div>
+          </div>
+
+          <div class="hero-toolbar-bottom">
+            <el-input
+              v-model="skillKeyword"
+              class="toolbar-search"
+              clearable
+              placeholder="搜索 skill 名称、描述或来源目录"
+            />
+
+            <el-select
+              v-model="selectedDirectoryIds"
+              class="toolbar-directory"
+              collapse-tags
+              collapse-tags-tooltip
+              clearable
+              multiple
+              placeholder="筛选目录"
+            >
+              <el-option
                 v-for="directory in directoryFilterOptions"
                 :key="directory.id"
-                class="directory-filter-option"
+                :label="directory.label"
+                :value="directory.id"
+              />
+            </el-select>
+
+            <el-select v-model="statusFilter" class="toolbar-status">
+              <el-option
+                v-for="option in STATUS_OPTIONS"
+                :key="option.value"
+                :label="option.label"
+                :value="option.value"
+              />
+            </el-select>
+
+            <div class="toolbar-summary">
+              <span>{{ directorySummaryText }}</span>
+              <span>联合检索</span>
+            </div>
+          </div>
+        </section>
+
+        <el-alert
+          v-if="errorMessage"
+          :closable="false"
+          :title="errorMessage"
+          show-icon
+          type="error"
+        />
+
+        <section v-loading="isLoading" class="list-panel panel-surface panel-animated">
+          <div class="list-header">
+            <div class="list-heading">
+              <h2>Skills 列表</h2>
+              <p>点击名称打开目录，右侧可快速启停和删除。</p>
+            </div>
+
+            <div class="list-stats">
+              <el-tag effect="plain">已连接目录 {{ healthyDirectoryCount }}/{{ scannedDirectories.length }}</el-tag>
+              <el-tag effect="plain" type="success">列表结果 {{ filteredSkills.length }}</el-tag>
+            </div>
+          </div>
+
+          <el-empty
+            v-if="!isLoading && filteredSkills.length === 0"
+            description="没有可展示的 skill"
+          >
+            <el-button type="primary" plain @click="openSettings">检查目录配置</el-button>
+          </el-empty>
+
+          <el-scrollbar v-else class="skills-scrollbar">
+            <div class="skills-list">
+              <el-card
+                v-for="(skill, index) in filteredSkills"
+                :key="skill.id"
+                :style="{ '--item-index': index }"
+                :class="['skill-card', { 'is-disabled': skill.disabled }]"
+                shadow="hover"
               >
-                <input
-                  :checked="isDirectorySelected(directory.id)"
-                  type="checkbox"
-                  @change="toggleDirectorySelection(directory.id)"
-                />
-                <span>{{ directory.label }}</span>
-              </label>
-            </div>
-          </div>
-
-          <label class="status-field">
-            <div class="status-select-wrap">
-              <select v-model="statusFilter">
-                <option value="all">全部状态</option>
-                <option value="enabled">仅启用</option>
-                <option value="disabled">仅禁用</option>
-              </select>
-              <span class="status-select-caret" aria-hidden="true">
-                <svg viewBox="0 0 16 16">
-                  <path d="M4.47 6.97a.75.75 0 0 1 1.06 0L8 9.44l2.47-2.47a.75.75 0 1 1 1.06 1.06l-3 3a.75.75 0 0 1-1.06 0l-3-3a.75.75 0 0 1 0-1.06Z" fill="currentColor" />
-                </svg>
-              </span>
-            </div>
-          </label>
-
-          <button class="button secondary" type="button" @click="refreshSkills" :disabled="isLoading">
-            {{ isLoading ? '查询中...' : '查询' }}
-          </button>
-        </section>
-
-        <p v-if="errorMessage" class="error-message">{{ errorMessage }}</p>
-
-        <section class="list-card">
-          <div class="list-meta">
-            <span>已连接目录 {{ healthyDirectoryCount }}/{{ scannedDirectories.length }}</span>
-            <span>列表结果 {{ filteredSkills.length }}</span>
-          </div>
-
-          <div v-if="!isLoading && filteredSkills.length === 0" class="empty-state">
-            <h3>没有可展示的 skill</h3>
-            <p>检查设置页里的目录配置，或调整当前筛选条件后再刷新。</p>
-          </div>
-
-          <div v-else>
-            <article
-              v-for="skill in filteredSkills"
-              :key="skill.id"
-              :class="['skill-row', { disabled: skill.disabled }]"
-            >
-              <div class="skill-row-top">
-                <div class="skill-copy">
-                  <button class="skill-name-button" type="button" :title="skill.skillDirPath" @click="openSkillDirectory(skill)">
-                    <span class="skill-name">{{ skill.name }}</span>
-                  </button>
-                  <span class="skill-path">{{ getSkillDisplayPath(skill) }}</span>
-                </div>
-
-              <div class="skill-row-actions">
-                <button
-                  :class="['status-switch', skill.disabled ? 'off' : 'on']"
-                  type="button"
-                  role="switch"
-                  :aria-checked="String(!skill.disabled)"
-                  :disabled="isSkillSwitching(skill.id) || isSkillDeleting(skill.id)"
-                  @click="toggleSkillDisabled(skill)"
-                >
-                  <span class="status-switch-track">
-                    <span class="status-switch-thumb" />
-                  </span>
-                  <span class="status-switch-label">{{ skill.disabled ? '禁用' : '启用' }}</span>
-                </button>
-
-                <button
-                  class="skill-delete-icon-button"
-                  type="button"
-                  :disabled="isSkillSwitching(skill.id) || isSkillDeleting(skill.id)"
-                  :aria-label="`删除 ${skill.name}`"
-                  title="删除"
-                  @click="removeSkill(skill)"
-                >
-                  <svg viewBox="0 0 24 24" aria-hidden="true">
-                    <path d="M9 3.75A2.25 2.25 0 0 1 11.25 1.5h1.5A2.25 2.25 0 0 1 15 3.75V4.5h3.75a.75.75 0 0 1 0 1.5h-1.02l-.84 13.36A2.25 2.25 0 0 1 14.64 21h-5.28a2.25 2.25 0 0 1-2.25-1.64L6.27 6H5.25a.75.75 0 0 1 0-1.5H9v-.75Zm1.5.75h3v-.75a.75.75 0 0 0-.75-.75h-1.5a.75.75 0 0 0-.75.75v.75Zm-2.73 1.5.82 13.12a.75.75 0 0 0 .75.63h5.28a.75.75 0 0 0 .75-.63L16.2 6H7.8Zm2.48 2.25a.75.75 0 0 1 .75.75v7.5a.75.75 0 0 1-1.5 0V9a.75.75 0 0 1 .75-.75Zm3.5 0A.75.75 0 0 1 14.5 9v7.5a.75.75 0 0 1-1.5 0V9a.75.75 0 0 1 .75-.75Z" fill="currentColor" />
-                  </svg>
-                </button>
-              </div>
-              </div>
-
-              <div class="skill-row-bottom">
-                <div :class="['skill-description-box', { expanded: isSkillDescriptionExpanded(skill.id) }]">
-                  <span :ref="setSkillDescriptionMeasureRef(skill.id)" class="skill-description skill-description--measure">
-                    {{ skill.description }}
-                  </span>
-                  <p :class="['skill-description', { expanded: isSkillDescriptionExpanded(skill.id) }]">{{ skill.description }}</p>
-                </div>
-                <button
-                  v-if="shouldShowSkillDescriptionToggle(skill.id)"
-                  class="skill-description-toggle"
-                  type="button"
-                  @click="toggleSkillDescriptionExpansion(skill.id)"
-                >
-                  {{ isSkillDescriptionExpanded(skill.id) ? '收起' : '查看更多' }}
-                </button>
-              </div>
-            </article>
-          </div>
-        </section>
-
-        <button class="settings-fab" type="button" @click="openSettings" aria-label="打开设置" title="设置">
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path
-              d="M19.14 12.94c.04-.31.06-.62.06-.94s-.02-.63-.06-.94l2.03-1.58a.5.5 0 0 0 .12-.64l-1.92-3.32a.5.5 0 0 0-.6-.22l-2.39.96a7.14 7.14 0 0 0-1.63-.94l-.36-2.54a.5.5 0 0 0-.49-.42h-3.84a.5.5 0 0 0-.49.42l-.36 2.54c-.58.22-1.13.53-1.63.94l-2.39-.96a.5.5 0 0 0-.6.22L2.7 8.84a.5.5 0 0 0 .12.64l2.03 1.58c-.04.31-.06.62-.06.94s.02.63.06.94L2.82 14.52a.5.5 0 0 0-.12.64l1.92 3.32a.5.5 0 0 0 .6.22l2.39-.96c.5.41 1.05.72 1.63.94l.36 2.54a.5.5 0 0 0 .49.42h3.84a.5.5 0 0 0 .49-.42l.36-2.54c.58-.22 1.13-.53 1.63-.94l2.39.96a.5.5 0 0 0 .6-.22l1.92-3.32a.5.5 0 0 0-.12-.64zm-7.14 2.56A3.5 3.5 0 1 1 12 8.5a3.5 3.5 0 0 1 0 7z"
-              fill="currentColor"
-            />
-          </svg>
-        </button>
-      </section>
-
-      <section v-else key="settings" class="page-shell">
-        <header class="settings-header">
-          <div class="settings-title-row">
-            <h2>目录配置</h2>
-            <p class="settings-note">修改会自动保存，返回列表时会重新扫描。</p>
-          </div>
-
-          <button class="button secondary compact" type="button" @click="refreshSkills" :disabled="isLoading">
-            {{ isLoading ? '扫描中...' : '立即扫描' }}
-          </button>
-        </header>
-
-        <section class="settings-card">
-          <div class="settings-actions">
-            <button class="button ghost compact" type="button" @click="resetDefaultDirectories">重置默认</button>
-          </div>
-
-          <div class="directory-groups">
-            <section v-for="section in directorySections" :key="section.key" class="directory-module">
-              <header class="directory-module-header">
-                <h3>{{ section.title }}</h3>
-              </header>
-
-              <div class="directory-list">
-                <article v-for="directory in section.items" :key="directory.id" class="directory-item">
-                  <div class="directory-row">
-                    <span class="directory-name">{{ getDirectoryDisplayLabel(directory) }}</span>
-                    <input
-                      v-model="directory.path"
-                      class="directory-path-input"
-                      type="text"
-                      placeholder="支持 ~ 和 ${projectRoot}"
-                    />
-                    <span class="directory-count">
-                      {{ getDirectoryScanState(directory.id)?.totalSkills || 0 }} 个 skill
-                    </span>
-                    <button class="button ghost compact" type="button" @click="browseDirectoryConfig(directory)">选择</button>
-                    <div class="directory-side">
-                      <button
-                        v-if="directory.source === 'custom'"
-                        class="button danger compact"
-                        type="button"
-                        @click="removeDirectoryConfig(directory.id)"
+                <div class="skill-top">
+                  <div class="skill-main">
+                    <div class="skill-title-row">
+                      <el-button
+                        class="skill-open-button"
+                        :title="skill.skillDirPath"
+                        link
+                        type="primary"
+                        @click="openSkillDirectory(skill)"
                       >
-                        删除
-                      </button>
+                        <span class="skill-name">{{ skill.name }}</span>
+                      </el-button>
+                      <el-tag effect="light" size="small" :type="skill.disabled ? 'danger' : 'success'">
+                        {{ skill.disabled ? '禁用' : '启用' }}
+                      </el-tag>
+                    </div>
+
+                    <div class="skill-meta-row">
+                      <el-tag effect="plain" size="small">{{ skill.directoryLabel || '未知目录' }}</el-tag>
+                      <span class="skill-path" :title="getSkillDisplayPath(skill)">{{ getSkillDisplayPath(skill) }}</span>
                     </div>
                   </div>
 
-                  <div class="directory-foot">
-                    <span class="directory-state">{{ getDirectoryStateText(directory.id) }}</span>
-                  </div>
-                </article>
-              </div>
+                  <div class="skill-actions">
+                    <el-switch
+                      :disabled="isSkillDeleting(skill.id)"
+                      :loading="isSkillSwitching(skill.id)"
+                      :model-value="!skill.disabled"
+                      active-text="启"
+                      inactive-text="停"
+                      inline-prompt
+                      @change="toggleSkillDisabled(skill)"
+                    />
 
-              <div v-if="section.key === 'project'" class="project-root-row">
-                <span class="directory-name">项目根目录</span>
-                <input
-                  v-model="projectRoot"
-                  class="directory-path-input"
-                  type="text"
-                  placeholder="用于解析 ${projectRoot} 占位符"
-                />
-                <button class="button secondary compact" type="button" @click="browseProjectRoot">选择</button>
-              </div>
-            </section>
+                    <el-button
+                      :disabled="isSkillSwitching(skill.id) || isSkillDeleting(skill.id)"
+                      :loading="isSkillDeleting(skill.id)"
+                      plain
+                      type="danger"
+                      @click="removeSkill(skill)"
+                    >
+                      删除
+                    </el-button>
+                  </div>
+                </div>
+
+                <div class="skill-bottom">
+                  <div class="skill-description-box">
+                    <span
+                      :ref="setSkillDescriptionMeasureRef(skill.id)"
+                      class="skill-description skill-description--measure"
+                    >
+                      {{ skill.description }}
+                    </span>
+
+                    <p :class="['skill-description', { expanded: isSkillDescriptionExpanded(skill.id) }]">
+                      {{ skill.description || '暂无说明' }}
+                    </p>
+                  </div>
+
+                  <el-button
+                    v-if="shouldShowSkillDescriptionToggle(skill.id)"
+                    link
+                    type="primary"
+                    @click="toggleSkillDescriptionExpansion(skill.id)"
+                  >
+                    {{ isSkillDescriptionExpanded(skill.id) ? '收起' : '查看更多' }}
+                  </el-button>
+                </div>
+              </el-card>
+            </div>
+          </el-scrollbar>
+        </section>
+      </section>
+
+      <section v-else key="settings" class="page-shell">
+        <section class="settings-topbar panel-surface panel-animated">
+          <div class="settings-copy">
+            <span class="page-kicker">目录维护</span>
+            <h2>目录配置</h2>
+            <p>修改会自动保存，返回列表时会重新扫描。</p>
+          </div>
+
+          <div class="settings-actions">
+            <el-button plain @click="resetDefaultDirectories">重置默认</el-button>
+            <el-button :loading="isLoading" type="primary" @click="refreshSkills">立即扫描</el-button>
+            <el-button @click="closeSettings">返回列表</el-button>
           </div>
         </section>
 
-        <button class="settings-back-fab" type="button" @click="closeSettings" aria-label="返回列表" title="返回列表">
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path
-              d="M14.78 5.22a.75.75 0 0 1 0 1.06L9.06 12l5.72 5.72a.75.75 0 1 1-1.06 1.06l-6.25-6.25a.75.75 0 0 1 0-1.06l6.25-6.25a.75.75 0 0 1 1.06 0Z"
-              fill="currentColor"
-            />
-          </svg>
-        </button>
+        <section class="settings-panel panel-surface panel-animated">
+          <el-scrollbar class="settings-scrollbar">
+            <div class="settings-layout">
+              <section class="settings-summary-card">
+                <div class="settings-summary-header">
+                  <div>
+                    <h3>扫描范围</h3>
+                    <p>路径支持 `~` 和 `${projectRoot}` 占位符。</p>
+                  </div>
+                  <el-tag effect="plain">{{ directoryConfigs.length }} 个目录</el-tag>
+                </div>
+
+                <div class="settings-summary-grid">
+                  <article class="summary-metric">
+                    <span>已连接目录</span>
+                    <strong>{{ healthyDirectoryCount }}</strong>
+                  </article>
+                  <article class="summary-metric">
+                    <span>扫描目录</span>
+                    <strong>{{ scannedDirectories.length }}</strong>
+                  </article>
+                  <article class="summary-metric">
+                    <span>已发现 skill</span>
+                    <strong>{{ skills.length }}</strong>
+                  </article>
+                </div>
+              </section>
+
+              <section class="project-root-panel">
+                <div class="project-root-copy">
+                  <div>
+                    <h3>项目根目录</h3>
+                    <p>用于解析 ${projectRoot} 占位符</p>
+                  </div>
+                  <el-button type="primary" plain @click="browseProjectRoot">选择</el-button>
+                </div>
+
+                <el-input
+                  v-model="projectRoot"
+                  placeholder="用于解析 ${projectRoot} 占位符"
+                />
+              </section>
+
+              <div class="directory-groups">
+                <section
+                  v-for="(section, sectionIndex) in directorySections"
+                  :key="section.key"
+                  :style="{ '--section-index': sectionIndex }"
+                  class="directory-section"
+                >
+                  <div class="directory-section-header">
+                    <div class="directory-section-copy">
+                      <h3>{{ section.title }}</h3>
+                      <p>路径支持 `~` 和 `${projectRoot}` 占位符。</p>
+                    </div>
+                    <el-tag effect="plain" size="small">{{ section.items.length }} 个目录</el-tag>
+                  </div>
+
+                  <div class="directory-list">
+                    <el-card
+                      v-for="(directory, directoryIndex) in section.items"
+                      :key="directory.id"
+                      :style="{ '--item-index': directoryIndex }"
+                      class="directory-card"
+                      shadow="never"
+                    >
+                      <div class="directory-card-header">
+                        <div class="directory-card-meta">
+                          <span class="directory-name">{{ getDirectoryDisplayLabel(directory) }}</span>
+                          <el-tag effect="plain" size="small" type="info">
+                            {{ getDirectoryScanState(directory.id)?.totalSkills || 0 }} 个 skill
+                          </el-tag>
+                        </div>
+
+                        <div class="directory-card-actions">
+                          <el-button plain @click="browseDirectoryConfig(directory)">选择</el-button>
+                          <el-button
+                            v-if="directory.source === 'custom'"
+                            plain
+                            type="danger"
+                            @click="removeDirectoryConfig(directory.id)"
+                          >
+                            删除
+                          </el-button>
+                        </div>
+                      </div>
+
+                      <el-input
+                        v-model="directory.path"
+                        placeholder="支持 ~ 和 ${projectRoot}"
+                      />
+
+                      <p class="directory-state">
+                        {{ getDirectoryStateText(directory.id) || '项目路径未启用，设置项目根目录后自动生效' }}
+                      </p>
+                    </el-card>
+                  </div>
+                </section>
+              </div>
+            </div>
+          </el-scrollbar>
+        </section>
       </section>
     </Transition>
   </div>
@@ -767,7 +852,6 @@ onBeforeUnmount(() => {
 }
 
 .page-shell {
-  position: relative;
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -775,393 +859,404 @@ onBeforeUnmount(() => {
   min-height: 0;
 }
 
-.toolbar-card,
-.list-card,
-.settings-header,
-.settings-card {
+.panel-surface {
   border: 1px solid var(--border);
-  border-radius: 20px;
+  border-radius: 22px;
   background: var(--surface);
-  backdrop-filter: blur(18px);
   box-shadow: var(--shadow);
+  backdrop-filter: blur(20px);
 }
 
-.directory-row,
-.skill-row-top,
-.skill-row-bottom,
-.field-inline,
+.panel-animated {
+  animation: panel-in 0.28s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.hero-toolbar,
+.settings-topbar,
+.settings-panel {
+  padding: 14px 16px;
+}
+
+.hero-toolbar {
+  position: relative;
+  overflow: hidden;
+}
+
+.hero-toolbar::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at top left, rgba(10, 122, 115, 0.12), transparent 26%),
+    radial-gradient(circle at right center, rgba(120, 150, 175, 0.12), transparent 24%);
+  pointer-events: none;
+}
+
+.hero-toolbar-top,
+.hero-title-row,
+.list-header,
+.settings-topbar,
+.settings-summary-header,
+.project-root-copy,
+.directory-section-header,
+.directory-card-header,
+.skill-top,
+.skill-meta-row,
+.skill-bottom,
+.settings-actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.hero-toolbar-top,
+.list-header,
+.settings-topbar,
+.settings-summary-header,
+.project-root-copy,
+.directory-section-header,
+.directory-card-header,
+.skill-top {
+  justify-content: space-between;
+}
+
+.page-copy,
+.list-heading,
+.settings-copy,
+.directory-section-copy,
+.skill-main {
+  min-width: 0;
+}
+
+.page-copy--compact {
+  position: relative;
+  z-index: 1;
+}
+
+.page-kicker {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: var(--surface-muted);
+  color: var(--text-soft);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.page-copy h1,
+.settings-copy h2,
+.settings-summary-header h3,
+.project-root-copy h3,
+.directory-section-copy h3,
+.list-heading h2 {
+  margin: 0;
+  font-family: "Avenir Next", "IBM Plex Sans", "PingFang SC", sans-serif;
+  letter-spacing: -0.04em;
+}
+
+.page-copy h1 {
+  font-size: 26px;
+  line-height: 1;
+}
+
+.settings-copy h2 {
+  margin-top: 10px;
+  font-size: 22px;
+}
+
+.settings-summary-header h3,
+.project-root-copy h3,
+.directory-section-copy h3,
+.list-heading h2 {
+  font-size: 16px;
+}
+
+.hero-title-row {
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.hero-title-row .page-kicker,
+.hero-title-row h1,
+.hero-title-row p {
+  position: relative;
+  z-index: 1;
+}
+
+.page-copy p,
+.settings-copy p,
+.settings-summary-header p,
+.project-root-copy p,
+.directory-section-copy p,
+.list-heading p,
+.toolbar-summary,
+.skill-path,
+.directory-state {
+  color: var(--text-soft);
+}
+
+.page-copy p,
+.settings-copy p,
+.settings-summary-header p,
+.project-root-copy p,
+.directory-section-copy p,
+.list-heading p {
+  margin: 6px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.page-actions,
+.stats-strip,
+.list-stats,
+.skill-actions,
+.directory-card-actions,
 .settings-actions,
-.list-meta,
-.settings-header {
+.settings-summary-grid {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.page-actions--compact {
+  position: relative;
+  z-index: 1;
+  flex-shrink: 0;
+}
+
+.stats-strip {
+  position: relative;
+  z-index: 1;
+  min-width: 0;
+}
+
+.stats-strip--compact {
+  flex: 1;
+  justify-content: flex-end;
+}
+
+.stat-chip,
+.summary-metric {
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.48);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.58);
+}
+
+.stat-chip {
+  flex: 0 1 auto;
+}
+
+.stat-chip-label,
+.summary-metric span {
+  display: block;
+  color: var(--text-soft);
+  font-size: 11px;
+  line-height: 1.2;
+}
+
+.stat-chip strong,
+.summary-metric strong {
+  display: block;
+  margin-top: 6px;
+  font-size: 18px;
+  line-height: 1;
+  letter-spacing: -0.05em;
+}
+
+.hero-toolbar-bottom {
+  display: grid;
+  grid-template-columns: minmax(0, 1.7fr) minmax(200px, 1fr) 130px minmax(180px, auto);
+  gap: 10px;
+  align-items: center;
+  position: relative;
+  z-index: 1;
+  margin-top: 10px;
+}
+
+.toolbar-summary {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.list-panel,
+.settings-panel {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+}
+
+.list-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px 16px;
+  overflow: hidden;
+}
+
+.list-header {
+  align-items: flex-end;
+}
+
+.list-stats {
+  justify-content: flex-end;
+}
+
+.skills-scrollbar,
+.settings-scrollbar {
+  min-height: 0;
+  flex: 1;
+}
+
+.skills-scrollbar :deep(.el-scrollbar__view),
+.settings-scrollbar :deep(.el-scrollbar__view) {
+  min-height: 100%;
+}
+
+.skills-list,
+.settings-layout,
+.directory-groups,
+.directory-list {
+  display: grid;
+  gap: 10px;
+}
+
+.skills-list {
+  padding-right: 2px;
+}
+
+.settings-layout {
+  gap: 14px;
+  padding-right: 2px;
+}
+
+.skill-card,
+.directory-card,
+.settings-summary-card,
+.project-root-panel {
+  border-radius: 20px;
+  border: 1px solid var(--border);
+  background: var(--surface-strong);
+}
+
+.skill-card {
+  animation: item-in 0.28s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: calc(var(--item-index, 0) * 0.03s);
+}
+
+.skill-card.is-disabled {
+  opacity: 0.82;
+}
+
+.skill-card :deep(.el-card__body),
+.directory-card :deep(.el-card__body) {
+  display: grid;
+  gap: 12px;
+  padding: 14px 16px;
+}
+
+.settings-summary-card,
+.project-root-panel,
+.directory-section {
+  padding: 14px 16px;
+}
+
+.settings-summary-card,
+.project-root-panel {
+  display: grid;
+  gap: 12px;
+}
+
+.directory-section {
+  border: 1px solid var(--border);
+  border-radius: 22px;
+  background: var(--surface);
+  animation: item-in 0.28s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: calc(var(--section-index, 0) * 0.04s);
+}
+
+.directory-list {
+  margin-top: 12px;
+}
+
+.directory-card {
+  animation: item-in 0.28s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: calc(var(--item-index, 0) * 0.03s);
+}
+
+.skill-title-row,
+.directory-card-meta {
   display: flex;
   gap: 10px;
   align-items: center;
-}
-
-.settings-header h2,
-.empty-state h3,
-.skill-name {
-  margin: 0;
-  font-family: "Avenir Next", "IBM Plex Sans", sans-serif;
-  letter-spacing: -0.03em;
-}
-
-.list-meta,
-.skill-description,
-.skill-path,
-.directory-state,
-.directory-count,
-.empty-state p {
-  color: var(--text-soft);
-}
-
-.toolbar-card,
-.settings-card {
-  padding: 10px;
-}
-
-.toolbar-card {
-  position: relative;
-  z-index: 5;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) max-content 108px 72px;
-  gap: 8px;
-  align-items: center;
-  overflow: visible;
-}
-
-.search-field,
-.directory-filter,
-.status-field,
-.field {
   min-width: 0;
 }
 
-.directory-filter {
-  position: relative;
-  justify-self: start;
+.skill-meta-row {
+  flex-wrap: wrap;
+  justify-content: flex-start;
 }
 
-.directory-filter-trigger {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  width: fit-content;
-  min-width: 0;
-  min-height: 36px;
-  padding: 0 12px;
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  background: var(--surface-strong);
-  color: var(--text);
-  cursor: pointer;
-  white-space: nowrap;
-}
-
-.status-select-wrap {
-  position: relative;
-}
-
-.status-field select {
-  width: 100%;
-  min-height: 36px;
-  padding: 0 32px 0 12px;
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  background: var(--surface-strong);
-  color: var(--text);
-  appearance: none;
-}
-
-.directory-filter-caret {
-  display: inline-flex;
-  flex-shrink: 0;
-  color: var(--text-soft);
-}
-
-.directory-filter-caret svg,
-.status-select-caret svg {
-  width: 14px;
-  height: 14px;
-}
-
-.status-select-caret {
-  position: absolute;
-  top: 50%;
-  right: 10px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--text-soft);
-  pointer-events: none;
-  transform: translateY(-50%);
-}
-
-.directory-filter-menu {
-  position: absolute;
-  top: calc(100% + 6px);
-  left: 0;
-  z-index: 50;
-  display: grid;
-  gap: 6px;
-  width: max-content;
-  min-width: max-content;
-  max-width: none;
-  padding: 8px;
-  border: 1px solid var(--border);
-  border-radius: 14px;
-  background: var(--surface);
-  box-shadow: var(--shadow);
-}
-
-.directory-filter-action {
+.skill-open-button {
   padding: 0;
-  border: none;
-  background: transparent;
-  color: var(--brand);
-  font-size: 12px;
-  font-weight: 700;
-  text-align: left;
-  cursor: pointer;
-}
-
-.directory-filter-option {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  gap: 4px;
-  align-items: start;
-  min-width: 0;
-  font-size: 12px;
-}
-
-.directory-filter-option input {
-  margin: 1px 0 0;
-}
-
-.directory-filter-option span {
-  line-height: 1.35;
-  white-space: nowrap;
-  word-break: normal;
-}
-
-.field {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.field-label {
-  font-size: 12px;
-  font-weight: 600;
-}
-
-.list-card,
-.settings-card {
-  flex: 1;
-  min-height: 0;
-  overflow: auto;
-}
-
-.list-card {
-  padding: 10px;
-}
-
-.list-meta {
-  justify-content: space-between;
-  margin-bottom: 8px;
-  padding: 0 4px;
-  font-size: 12px;
-}
-
-.skill-row {
-  padding: 8px 10px;
-  border-radius: 16px;
-  background: var(--surface-strong);
-}
-
-.skill-row + .skill-row {
-  margin-top: 6px;
-}
-
-.skill-row.disabled {
-  opacity: 0.78;
-}
-
-.skill-row-top {
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
-
-.skill-copy {
-  display: grid;
-  grid-template-columns: minmax(0, max-content) minmax(0, 1fr);
-  gap: 8px;
-  align-items: baseline;
-  flex: 1;
-  min-width: 0;
-}
-
-.skill-name-button {
-  min-width: 0;
-  padding: 0;
-  border: none;
-  background: transparent;
-  color: var(--brand);
-  cursor: pointer;
-  text-align: left;
-}
-
-.skill-name-button:focus-visible {
-  outline: 2px solid color-mix(in srgb, var(--brand) 42%, transparent);
-  outline-offset: 2px;
-  border-radius: 6px;
 }
 
 .skill-name {
   display: block;
   min-width: 0;
   font-size: 16px;
+  font-weight: 700;
   line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.skill-name-button:hover .skill-name {
-  text-decoration: underline;
-}
-
-.skill-name-button:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.skill-description {
-  min-width: 0;
-  margin: 0;
-  font-size: 12px;
-  line-height: 1.35;
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  white-space: normal;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.skill-row-bottom {
-  justify-content: flex-start;
-  align-items: flex-start;
-  gap: 6px;
-  margin-top: 4px;
-  font-size: 12px;
-}
-
-.status-switch {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 0;
-  border: none;
-  background: transparent;
-  color: var(--text);
-  cursor: pointer;
-}
-
-.skill-row-actions {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.status-switch:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.status-switch-track {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  width: 32px;
-  height: 18px;
-  border-radius: 999px;
-  transition: background-color 0.16s ease;
-}
-
-.status-switch.on {
-  color: #16a34a;
-  font-weight: 800;
-}
-
-.status-switch.off {
-  color: #dc2626;
-  font-weight: 800;
-}
-
-.status-switch.on .status-switch-track {
-  background: rgba(22, 163, 74, 0.5);
-}
-
-.status-switch.off .status-switch-track {
-  background: rgba(220, 38, 38, 0.5);
-}
-
-.status-switch-thumb {
-  position: absolute;
-  top: 2px;
-  left: 2px;
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  background: #fff;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.24);
-  transition: transform 0.16s ease;
-}
-
-.status-switch.on .status-switch-thumb {
-  transform: translateX(14px);
-}
-
-.skill-delete-icon-button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 36px;
-  height: 22px;
-  padding: 0;
-  border: none;
-  background: transparent;
-  border-radius: 999px;
-  color: #dc2626;
-  cursor: pointer;
-}
-
-.skill-delete-icon-button svg {
-  width: 16px;
-  height: 16px;
-}
-
-.skill-delete-icon-button:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
 }
 
 .skill-path {
-  flex: 1;
   min-width: 0;
+  font-size: 12px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  text-align: left;
+}
+
+.skill-actions {
+  flex-shrink: 0;
+}
+
+.skill-bottom {
+  justify-content: flex-start;
+  align-items: flex-start;
 }
 
 .skill-description-box {
   position: relative;
-  flex: 0 1 70%;
+  flex: 1;
   min-width: 0;
-  max-width: 70%;
+}
+
+.skill-description {
+  margin: 0;
+  color: var(--text-soft);
+  font-size: 13px;
+  line-height: 1.5;
+  display: -webkit-box;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: normal;
+  word-break: break-word;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 .skill-description.expanded {
@@ -1169,7 +1264,6 @@ onBeforeUnmount(() => {
   overflow: visible;
   text-overflow: clip;
   -webkit-line-clamp: unset;
-  word-break: break-all;
 }
 
 .skill-description--measure {
@@ -1180,255 +1274,31 @@ onBeforeUnmount(() => {
   pointer-events: none;
   overflow: visible;
   text-overflow: clip;
-  white-space: normal;
-  word-break: break-all;
-}
-
-.skill-description-toggle {
-  flex-shrink: 0;
-  padding: 0;
-  border: none;
-  background: transparent;
-  color: var(--brand);
-  font-size: 11px;
-  font-weight: 700;
-  line-height: 1.2;
-  cursor: pointer;
-}
-
-.settings-header {
-  justify-content: space-between;
-  align-items: center;
-  padding: 12px 14px;
-}
-
-.settings-title-row {
-  display: flex;
-  align-items: baseline;
-  gap: 10px;
-  min-width: 0;
-}
-
-.settings-header h2 {
-  font-size: 20px;
-}
-
-.settings-note {
-  min-width: 0;
-  margin: 0;
-  color: var(--text-soft);
-  font-size: 12px;
-  line-height: 1.2;
-  white-space: nowrap;
-}
-
-.settings-actions {
-  justify-content: flex-end;
-  margin-bottom: 10px;
-}
-
-.directory-groups {
-  display: grid;
-  gap: 14px;
-}
-
-.directory-module {
-  display: grid;
-  gap: 8px;
-}
-
-.directory-module-header {
-  display: flex;
-  align-items: center;
-}
-
-.directory-module-header h3 {
-  margin: 0;
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-}
-
-.directory-list {
-  display: grid;
-  gap: 10px;
-}
-
-.directory-item {
-  padding: 10px;
-  border-radius: 16px;
-  background: var(--surface-strong);
-}
-
-.directory-row {
-  gap: 8px;
-  align-items: center;
-  flex-wrap: nowrap;
-  margin-bottom: 8px;
-}
-
-.project-root-row {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  flex-wrap: nowrap;
-  padding: 10px;
-  border-radius: 16px;
-  background: var(--surface-strong);
 }
 
 .directory-name {
-  flex-shrink: 0;
-  min-width: 108px;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 700;
-  line-height: 1.2;
-}
-
-.directory-path-input {
-  flex: 0 1 320px;
-  min-width: 0;
-  max-width: 360px;
-}
-
-.directory-side {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  flex-shrink: 0;
-}
-
-.directory-foot {
-  display: flex;
-  gap: 8px;
-  font-size: 12px;
 }
 
 .directory-state {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.directory-count {
-  flex-shrink: 0;
-  color: var(--text-soft);
-  font-size: 12px;
-  white-space: nowrap;
-}
-
-.empty-state {
-  display: grid;
-  place-items: center;
-  min-height: 180px;
-  padding: 24px 16px;
-  text-align: center;
-}
-
-.empty-state p {
-  margin: 8px 0 0;
-  font-size: 13px;
-}
-
-.error-message {
   margin: 0;
-  padding: 0 4px;
-  color: var(--danger);
   font-size: 12px;
+  line-height: 1.5;
+  word-break: break-word;
 }
 
-.button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 36px;
-  padding: 0 14px;
-  border-radius: 999px;
-  cursor: pointer;
-  transition: transform 0.16s ease, opacity 0.16s ease, background-color 0.16s ease;
+.hero-toolbar :deep(.el-input__wrapper),
+.hero-toolbar :deep(.el-select__wrapper),
+.project-root-panel :deep(.el-input__wrapper),
+.directory-card :deep(.el-input__wrapper) {
+  min-height: 38px;
+  box-shadow: none;
 }
 
-.button.compact {
-  min-height: 32px;
-  padding: 0 12px;
-  font-size: 12px;
-}
-
-.button:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-}
-
-.button:not(:disabled):hover {
-  transform: translateY(-1px);
-}
-
-.button.secondary {
-  background: rgba(15, 118, 110, 0.12);
-  color: var(--brand);
-}
-
-.button.ghost {
-  background: var(--surface-muted);
-  color: var(--text);
-}
-
-.button.danger {
-  background: rgba(180, 35, 24, 0.12);
-  color: var(--danger);
-}
-
-.settings-fab {
-  position: absolute;
-  right: 2px;
-  bottom: 2px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 36px;
-  height: 36px;
-  padding: 0;
-  border-radius: 999px;
-  background: rgba(15, 118, 110, 0.08);
-  color: var(--brand);
-  box-shadow: 0 8px 18px rgba(15, 118, 110, 0.12);
-  cursor: pointer;
-}
-
-.settings-fab svg {
-  width: 16px;
-  height: 16px;
-}
-
-.settings-fab:hover {
-  transform: translateY(-1px);
-}
-
-.settings-back-fab {
-  position: absolute;
-  right: 2px;
-  bottom: 2px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 36px;
-  height: 36px;
-  padding: 0;
-  border-radius: 999px;
-  background: rgba(15, 118, 110, 0.08);
-  color: var(--brand);
-  box-shadow: 0 8px 18px rgba(15, 118, 110, 0.12);
-  cursor: pointer;
-}
-
-.settings-back-fab svg {
-  width: 16px;
-  height: 16px;
-}
-
-.settings-back-fab:hover {
-  transform: translateY(-1px);
+.hero-toolbar :deep(.el-select__tags),
+.hero-toolbar :deep(.el-select__tags-text) {
+  max-width: 100%;
 }
 
 .view-switch-enter-active,
@@ -1439,29 +1309,90 @@ onBeforeUnmount(() => {
 .view-switch-enter-from,
 .view-switch-leave-to {
   opacity: 0;
-  transform: translateY(6px);
+  transform: translateY(8px);
 }
 
-@media (max-width: 860px) {
-  .field-inline,
-  .directory-foot {
-    grid-template-columns: 1fr;
+@keyframes panel-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes item-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (max-width: 980px) {
+  .hero-toolbar-top {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: stretch;
+  }
+
+  .hero-toolbar-bottom {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  .toolbar-summary,
+  .list-header,
+  .settings-topbar,
+  .settings-summary-header,
+  .project-root-copy,
+  .directory-section-header,
+  .directory-card-header,
+  .skill-top,
+  .skill-bottom {
     flex-direction: column;
     align-items: stretch;
   }
 
-  .settings-actions {
-    justify-content: stretch;
-    flex-wrap: wrap;
+  .page-actions,
+  .stats-strip--compact,
+  .list-stats,
+  .settings-actions,
+  .directory-card-actions,
+  .skill-actions {
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 720px) {
+  .skill-manager {
+    padding: 10px;
   }
 
-  .directory-side {
-    align-self: flex-start;
+  .hero-toolbar,
+  .list-panel,
+  .settings-topbar,
+  .settings-panel,
+  .settings-summary-card,
+  .project-root-panel,
+  .directory-section {
+    padding: 12px;
   }
 
-  .directory-state {
-    text-align: left;
-    white-space: normal;
+  .hero-toolbar-bottom {
+    grid-template-columns: 1fr;
+  }
+
+  .stats-strip,
+  .settings-summary-grid {
+    display: grid;
+    grid-template-columns: 1fr;
   }
 }
 </style>

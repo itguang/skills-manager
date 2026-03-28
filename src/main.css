@@ -1,17 +1,44 @@
 :root {
   color-scheme: light dark;
   font-family: "IBM Plex Sans", "PingFang SC", "Hiragino Sans GB", sans-serif;
-  --bg: #f4efe7;
-  --surface: rgba(255, 250, 244, 0.84);
-  --surface-strong: rgba(255, 252, 247, 0.94);
-  --surface-muted: rgba(83, 56, 31, 0.08);
-  --border: rgba(83, 56, 31, 0.16);
-  --text: #24170a;
-  --text-soft: rgba(36, 23, 10, 0.7);
-  --brand: #0f766e;
-  --brand-strong: #0b5f59;
-  --danger: #b42318;
-  --shadow: 0 18px 48px rgba(78, 49, 20, 0.12);
+  --bg: #edf1f3;
+  --surface: rgba(248, 250, 251, 0.88);
+  --surface-strong: rgba(255, 255, 255, 0.94);
+  --surface-muted: rgba(44, 62, 80, 0.06);
+  --border: rgba(44, 62, 80, 0.12);
+  --text: #14212b;
+  --text-soft: rgba(20, 33, 43, 0.66);
+  --brand: #156c68;
+  --brand-strong: #0f5754;
+  --danger: #be3e35;
+  --shadow: 0 18px 42px rgba(27, 40, 54, 0.1);
+  --el-color-primary: #156c68;
+  --el-color-primary-light-3: #4d938f;
+  --el-color-primary-light-5: #79afa9;
+  --el-color-primary-light-7: #a8cbc7;
+  --el-color-primary-light-8: #c8dfdc;
+  --el-color-primary-light-9: #e8f1f0;
+  --el-color-primary-dark-2: #0f5754;
+  --el-color-danger: #be3e35;
+  --el-border-radius-base: 14px;
+  --el-border-radius-round: 999px;
+  --el-border-color: var(--border);
+  --el-border-color-light: rgba(44, 62, 80, 0.08);
+  --el-fill-color-light: rgba(44, 62, 80, 0.05);
+  --el-fill-color-extra-light: rgba(255, 255, 255, 0.68);
+  --el-fill-color-blank: rgba(255, 255, 255, 0.82);
+  --el-bg-color: var(--surface);
+  --el-bg-color-page: transparent;
+  --el-bg-color-overlay: rgba(251, 252, 253, 0.96);
+  --el-text-color-primary: var(--text);
+  --el-text-color-regular: rgba(20, 33, 43, 0.82);
+  --el-text-color-secondary: var(--text-soft);
+  --el-text-color-placeholder: rgba(20, 33, 43, 0.4);
+  --el-mask-color: rgba(15, 23, 31, 0.48);
+  --el-box-shadow-light: var(--shadow);
+  --el-card-bg-color: var(--surface);
+  --el-disabled-bg-color: rgba(255, 255, 255, 0.5);
+  --el-disabled-text-color: rgba(20, 33, 43, 0.32);
 }
 
 * {
@@ -29,15 +56,16 @@ body,
 body {
   overflow: hidden;
   background:
-    radial-gradient(circle at top left, rgba(15, 118, 110, 0.16), transparent 28%),
-    radial-gradient(circle at top right, rgba(198, 120, 46, 0.18), transparent 24%),
-    linear-gradient(180deg, #fbf7f1 0%, var(--bg) 100%);
+    radial-gradient(circle at top left, rgba(21, 108, 104, 0.11), transparent 30%),
+    radial-gradient(circle at top right, rgba(92, 122, 145, 0.14), transparent 26%),
+    linear-gradient(180deg, #f8fafb 0%, var(--bg) 100%);
   color: var(--text);
 }
 
 button,
 input,
-select {
+select,
+textarea {
   font: inherit;
 }
 
@@ -45,25 +73,47 @@ button {
   border: 0;
 }
 
-input,
-select {
-  width: 100%;
-  border: 1px solid var(--border);
-  border-radius: 14px;
-  padding: 10px 12px;
-  background: rgba(255, 255, 255, 0.8);
-  color: var(--text);
-  outline: none;
+.el-popper,
+.el-message-box {
+  backdrop-filter: blur(18px);
 }
 
-input:focus,
-select:focus {
-  border-color: rgba(15, 118, 110, 0.6);
-  box-shadow: 0 0 0 4px rgba(15, 118, 110, 0.12);
+.el-message-box {
+  border: 1px solid var(--border);
+}
+
+.el-button.is-plain,
+.el-select__wrapper,
+.el-input__wrapper,
+.el-textarea__inner {
+  background: var(--surface-strong);
+}
+
+.el-card,
+.el-alert,
+.el-message-box {
+  box-shadow: var(--shadow);
+}
+
+.el-button {
+  font-weight: 600;
+}
+
+.el-button--primary {
+  --el-button-hover-bg-color: var(--brand-strong);
+  --el-button-hover-border-color: var(--brand-strong);
+}
+
+.el-alert,
+.el-card,
+.el-input__wrapper,
+.el-select__wrapper,
+.el-message-box {
+  border-color: var(--border);
 }
 
 ::selection {
-  background: rgba(15, 118, 110, 0.18);
+  background: rgba(21, 108, 104, 0.18);
 }
 
 ::-webkit-scrollbar {
@@ -76,38 +126,52 @@ select:focus {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(83, 56, 31, 0.2);
+  background: rgba(44, 62, 80, 0.18);
   border-radius: 999px;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #17120d;
-    --surface: rgba(38, 29, 21, 0.86);
-    --surface-strong: rgba(44, 34, 24, 0.96);
+    --bg: #10171d;
+    --surface: rgba(22, 31, 39, 0.88);
+    --surface-strong: rgba(27, 37, 46, 0.96);
     --surface-muted: rgba(255, 255, 255, 0.06);
-    --border: rgba(255, 239, 220, 0.12);
-    --text: #f4eadf;
-    --text-soft: rgba(244, 234, 223, 0.72);
-    --brand: #4fd1c5;
-    --brand-strong: #84e1d8;
-    --danger: #ff8a80;
-    --shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
+    --border: rgba(221, 232, 240, 0.12);
+    --text: #ebf0f3;
+    --text-soft: rgba(235, 240, 243, 0.68);
+    --brand: #63d0c7;
+    --brand-strong: #46b9b0;
+    --danger: #ff9185;
+    --shadow: 0 24px 64px rgba(0, 0, 0, 0.34);
+    --el-color-primary: #63d0c7;
+    --el-color-primary-light-3: #89ddd6;
+    --el-color-primary-light-5: #ace8e3;
+    --el-color-primary-light-7: #cff2ef;
+    --el-color-primary-light-8: #e0f7f5;
+    --el-color-primary-light-9: #effcfa;
+    --el-color-primary-dark-2: #46b9b0;
+    --el-color-danger: #ff9185;
+    --el-border-color-light: rgba(221, 232, 240, 0.08);
+    --el-fill-color-light: rgba(255, 255, 255, 0.08);
+    --el-fill-color-extra-light: rgba(255, 255, 255, 0.04);
+    --el-fill-color-blank: rgba(16, 23, 29, 0.68);
+    --el-bg-color: rgba(22, 31, 39, 0.88);
+    --el-bg-color-overlay: rgba(27, 37, 46, 0.98);
+    --el-text-color-regular: rgba(235, 240, 243, 0.82);
+    --el-text-color-placeholder: rgba(235, 240, 243, 0.38);
+    --el-mask-color: rgba(7, 10, 13, 0.72);
+    --el-disabled-bg-color: rgba(16, 23, 29, 0.46);
+    --el-disabled-text-color: rgba(235, 240, 243, 0.3);
   }
 
   body {
     background:
-      radial-gradient(circle at top left, rgba(79, 209, 197, 0.14), transparent 28%),
-      radial-gradient(circle at top right, rgba(234, 148, 70, 0.14), transparent 24%),
-      linear-gradient(180deg, #1a140f 0%, var(--bg) 100%);
-  }
-
-  input,
-  select {
-    background: rgba(20, 16, 13, 0.64);
+      radial-gradient(circle at top left, rgba(99, 208, 199, 0.12), transparent 30%),
+      radial-gradient(circle at top right, rgba(114, 152, 180, 0.12), transparent 26%),
+      linear-gradient(180deg, #131b22 0%, var(--bg) 100%);
   }
 
   ::-webkit-scrollbar-thumb {
-    background: rgba(255, 239, 220, 0.18);
+    background: rgba(221, 232, 240, 0.16);
   }
 }
