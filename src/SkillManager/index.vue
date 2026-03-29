@@ -1,7 +1,7 @@
 <script lang="ts" setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Back, Delete, PriceTag, Setting, Tickets, User } from '@element-plus/icons-vue'
+import { Back, Delete, DocumentCopy, FolderOpened, PriceTag, Setting, Tickets, User } from '@element-plus/icons-vue'
 
 const props = defineProps({
   enterAction: {
@@ -219,6 +219,26 @@ function openSkillDirectory (skill: any) {
     }
   } catch (error: any) {
     showNotification(error?.message || '打开 skill 目录失败')
+  }
+}
+
+function copySkillName (skill: any) {
+  const name = typeof skill?.name === 'string' ? skill.name.trim() : ''
+
+  if (!name) {
+    ElMessage.error('skill 名称为空，无法复制')
+    return
+  }
+
+  try {
+    const copied = window.utools.copyText(name)
+    if (copied === false) {
+      ElMessage.error('复制 skill 名称失败')
+      return
+    }
+    ElMessage.success('复制成功')
+  } catch (error: any) {
+    ElMessage.error(error?.message || '复制 skill 名称失败')
   }
 }
 
@@ -731,7 +751,18 @@ onBeforeUnmount(() => {
                           type="primary"
                           @click="openSkillDirectory(skill)"
                         >
-                          <span class="skill-name">{{ skill.name }}</span>
+                          <el-icon><FolderOpened /></el-icon>
+                        </el-button>
+                        <span class="skill-name" :title="skill.name">{{ skill.name }}</span>
+                        <el-button
+                          class="skill-copy-button"
+                          :aria-label="`复制 ${skill.name}`"
+                          link
+                          type="primary"
+                          title="复制名称"
+                          @click="copySkillName(skill)"
+                        >
+                          <el-icon><DocumentCopy /></el-icon>
                         </el-button>
                         <span
                           v-if="getSkillVersionText(skill)"
@@ -1410,21 +1441,37 @@ onBeforeUnmount(() => {
 }
 
 .skill-open-button {
-  flex: 0 1 auto;
+  flex: 0 0 auto;
   padding: 0;
-  min-width: 0;
-  overflow: hidden;
+  min-width: auto;
+}
+
+.skill-open-button :deep(svg),
+.skill-copy-button :deep(svg) {
+  width: 15px;
+  height: 15px;
 }
 
 .skill-name {
-  display: block;
+  display: inline-block;
+  flex: 0 1 auto;
   min-width: 0;
+  max-width: 320px;
   font-size: 16px;
   font-weight: 700;
   line-height: 1.2;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  user-select: text;
+  -webkit-user-select: text;
+  cursor: text;
+}
+
+.skill-copy-button {
+  flex: 0 0 auto;
+  padding: 0;
+  min-width: auto;
 }
 
 .skill-inline-meta {
