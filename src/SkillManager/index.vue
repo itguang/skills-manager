@@ -17,7 +17,7 @@ const STORAGE_KEYS = {
 
 const PAGE_HEIGHT = 816
 const DESCRIPTION_PREVIEW_LINE_COUNT = 2
-const DESCRIPTION_EXPAND_LABEL = '查看更多'
+const DESCRIPTION_EXPAND_LABEL = '查看更多...'
 const DESCRIPTION_COLLAPSE_LABEL = '收起'
 const TOOLBAR_SELECT_POPPER_OPTIONS = {
   modifiers: [
@@ -361,7 +361,7 @@ function getCollapsedSkillDescription (skill: any) {
 function buildCollapsedSkillDescription (element: HTMLElement, description: string) {
   const lineHeight = Number.parseFloat(window.getComputedStyle(element).lineHeight) || 16.2
   const maxHeight = lineHeight * DESCRIPTION_PREVIEW_LINE_COUNT + 1
-  const suffix = `... ${DESCRIPTION_EXPAND_LABEL}`
+  const suffix = ` ${DESCRIPTION_EXPAND_LABEL}`
 
   element.textContent = description
 
@@ -1477,7 +1477,9 @@ onBeforeUnmount(() => {
   margin-left: 4px;
   padding: 0;
   color: var(--accent-info);
+  font-size: inherit;
   font-weight: 400;
+  line-height: inherit;
   vertical-align: baseline;
 }
 
