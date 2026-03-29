@@ -1,5 +1,6 @@
 <script lang="ts" setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { ElMessageBox } from 'element-plus'
 import { Back, Delete, Setting } from '@element-plus/icons-vue'
 
 const props = defineProps({
