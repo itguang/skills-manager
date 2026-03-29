@@ -1,7 +1,7 @@
 <script lang="ts" setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Back, Delete, PriceTag, Setting, Tickets, User } from '@element-plus/icons-vue'
+import { Back, Delete, Setting, Tickets, User } from '@element-plus/icons-vue'
 
 const props = defineProps({
   enterAction: {
@@ -750,16 +750,17 @@ onBeforeUnmount(() => {
                           <span>{{ getSkillAuthorText(skill) }}</span>
                         </span>
                         <div v-if="getSkillTags(skill).length" class="skill-tag-list" :title="getSkillTags(skill).join('，')">
-                          <span class="skill-inline-meta skill-inline-meta--tag-icon">
-                            <el-icon><PriceTag /></el-icon>
-                          </span>
-                          <span
+                          <el-tag
                             v-for="tag in getSkillTags(skill)"
                             :key="`${skill.id}-${tag}`"
-                            class="skill-tag-bubble"
+                            class="skill-tag"
+                            type="primary"
+                            effect="light"
+                            size="small"
+                            round
                           >
-                            {{ tag }}
-                          </span>
+                            <span class="skill-tag-text">{{ tag }}</span>
+                          </el-tag>
                         </div>
                       </div>
 
@@ -1448,6 +1449,26 @@ onBeforeUnmount(() => {
   overflow: hidden;
 }
 
+.skill-tag {
+  max-width: 180px;
+  min-width: 0;
+}
+
+.skill-tag :deep(.el-tag__content) {
+  display: block;
+  min-width: 0;
+  font-size: 11px;
+  line-height: 1.2;
+}
+
+.skill-tag-text {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .skill-inline-meta span:last-child {
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1460,28 +1481,6 @@ onBeforeUnmount(() => {
 
 .skill-inline-meta--version {
   color: color-mix(in srgb, var(--accent-info) 72%, var(--text-soft));
-}
-
-.skill-inline-meta--tag-icon {
-  padding: 2px 7px;
-  margin-right: -1px;
-}
-
-.skill-tag-bubble {
-  display: inline-flex;
-  align-items: center;
-  max-width: 180px;
-  min-width: 0;
-  padding: 2px 9px;
-  border: 1px solid color-mix(in srgb, var(--border) 92%, transparent);
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--surface-muted) 88%, transparent);
-  color: var(--text-soft);
-  font-size: 12px;
-  line-height: 1.35;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .skill-path {
