@@ -147,7 +147,6 @@ const skillSwitchingIds = ref<string[]>([])
 const skillDeletingIds = ref<string[]>([])
 const expandedSkillDescriptionIds = ref<string[]>([])
 const overflowingSkillDescriptionIds = ref<string[]>([])
-const collapsedSkillDescriptions = ref<Record<string, string>>({})
 const skillDescriptionMeasureElements = new Map<string, HTMLElement>()
 const homeDirectory = ref('')
 
@@ -354,10 +353,6 @@ function getSkillDescriptionText (skill: any) {
   return description || '暂无说明'
 }
 
-function getCollapsedSkillDescription (skill: any) {
-  return collapsedSkillDescriptions.value[skill.id] || getSkillDescriptionText(skill)
-}
-
 function getSkillVersionText (skill: any) {
   return typeof skill?.version === 'string' ? skill.version.trim() : ''
 }
@@ -379,48 +374,6 @@ function getSkillTags (skill: any) {
     .filter(Boolean)
 }
 
-function buildCollapsedSkillDescription (element: HTMLElement, description: string) {
-  const lineHeight = Number.parseFloat(window.getComputedStyle(element).lineHeight) || 16.2
-  const maxHeight = lineHeight * DESCRIPTION_PREVIEW_LINE_COUNT + 1
-  const suffix = ` ${DESCRIPTION_EXPAND_LABEL}`
-
-  element.textContent = description
-
-  if (element.scrollHeight <= maxHeight) {
-    return description
-  }
-
-  let low = 0
-  let high = description.length
-  let best = ''
-
-  while (low <= high) {
-    const middle = Math.floor((low + high) / 2)
-    const candidate = description
-      .slice(0, middle)
-      .trimEnd()
-      .replace(/[，。！？；：、,.!?;:\s]+$/g, '')
-    const measuredText = `${candidate || description.slice(0, middle).trimEnd()}${suffix}`
-
-    element.textContent = measuredText
-
-    if (element.scrollHeight <= maxHeight) {
-      best = candidate || description.slice(0, middle).trimEnd()
-      low = middle + 1
-      continue
-    }
-
-    high = middle - 1
-  }
-
-  const fallbackText = description
-    .slice(0, Math.max(1, Math.min(description.length, high)))
-    .trimEnd()
-    .replace(/[，。！？；：、,.!?;:\s]+$/g, '')
-
-  return fallbackText || description.slice(0, 1)
-}
-
 function setSkillDescriptionMeasureRef (skillId: string) {
   return (element: Element | null) => {
     if (element instanceof HTMLElement) {
@@ -435,7 +388,6 @@ function setSkillDescriptionMeasureRef (skillId: string) {
 function syncSkillDescriptionOverflowState () {
   if (currentView.value !== 'list') return
 
-  const nextCollapsedDescriptions: Record<string, string> = {}
   const nextOverflowingIds = filteredSkills.value
     .filter((skill) => {
       const element = skillDescriptionMeasureElements.get(skill.id)
@@ -447,23 +399,19 @@ function syncSkillDescriptionOverflowState () {
 
       element.textContent = description
 
-      if (element.scrollHeight <= maxHeight) {
-        nextCollapsedDescriptions[skill.id] = description
-        return false
-      }
-
-      nextCollapsedDescriptions[skill.id] = buildCollapsedSkillDescription(element, description)
-      return true
+      return element.scrollHeight > maxHeight
     })
     .map((skill) => skill.id)
 
-  collapsedSkillDescriptions.value = nextCollapsedDescriptions
   overflowingSkillDescriptionIds.value = nextOverflowingIds
   expandedSkillDescriptionIds.value = expandedSkillDescriptionIds.value.filter((id) => nextOverflowingIds.includes(id))
 }
 
 async function updateSkillDescriptionOverflowState () {
   await nextTick()
+  await new Promise<void>((resolve) => {
+    window.requestAnimationFrame(() => resolve())
+  })
   syncSkillDescriptionOverflowState()
 }
 
@@ -805,13 +753,13 @@ onBeforeUnmount(() => {
                         </div>
                       </div>
 
-                        <div class="skill-actions">
-                          <el-switch
-                            class="skill-status-switch"
-                            :disabled="isSkillDeleting(skill.id)"
-                            :loading="isSkillSwitching(skill.id)"
-                            :model-value="!skill.disabled"
-                            active-text="启"
+                      <div class="skill-actions">
+                        <el-switch
+                          class="skill-status-switch"
+                          :disabled="isSkillDeleting(skill.id)"
+                          :loading="isSkillSwitching(skill.id)"
+                          :model-value="!skill.disabled"
+                          active-text="启"
                           inactive-text="停"
                           inline-prompt
                           @change="toggleSkillDisabled(skill)"
@@ -842,26 +790,29 @@ onBeforeUnmount(() => {
                   <div class="skill-description-box">
                     <span
                       :ref="setSkillDescriptionMeasureRef(skill.id)"
-                      class="skill-description skill-description--measure"
+                      class="skill-description-copy skill-description--measure"
                     >
                       {{ getSkillDescriptionText(skill) }}
                     </span>
 
-                    <p class="skill-description">
-                      <span>
-                        {{ isSkillDescriptionExpanded(skill.id) ? getSkillDescriptionText(skill) : getCollapsedSkillDescription(skill) }}
-                      </span>
-
-                      <el-button
-                        v-if="shouldShowSkillDescriptionToggle(skill.id)"
-                        class="skill-description-toggle"
-                        link
-                        type="primary"
-                        @click="toggleSkillDescriptionExpansion(skill.id)"
-                      >
-                        {{ isSkillDescriptionExpanded(skill.id) ? DESCRIPTION_COLLAPSE_LABEL : DESCRIPTION_EXPAND_LABEL }}
-                      </el-button>
+                    <p
+                      :class="[
+                        'skill-description',
+                        { 'is-expanded': isSkillDescriptionExpanded(skill.id) }
+                      ]"
+                    >
+                      {{ getSkillDescriptionText(skill) }}
                     </p>
+
+                    <el-button
+                      v-if="shouldShowSkillDescriptionToggle(skill.id)"
+                      class="skill-description-toggle"
+                      link
+                      type="primary"
+                      @click="toggleSkillDescriptionExpansion(skill.id)"
+                    >
+                      {{ isSkillDescriptionExpanded(skill.id) ? DESCRIPTION_COLLAPSE_LABEL : DESCRIPTION_EXPAND_LABEL }}
+                    </el-button>
                   </div>
                 </div>
               </el-card>
@@ -1408,7 +1359,6 @@ onBeforeUnmount(() => {
   animation-delay: calc(var(--item-index, 0) * 0.03s);
 }
 
-.skill-title-row,
 .skill-title-main,
 .directory-card-meta,
 .skill-inline-meta {
@@ -1419,13 +1369,17 @@ onBeforeUnmount(() => {
 }
 
 .skill-title-row {
-  justify-content: space-between;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  min-width: 0;
 }
 
 .skill-title-main {
   flex: 1;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  overflow: hidden;
 }
 
 .skill-meta-row {
@@ -1435,8 +1389,10 @@ onBeforeUnmount(() => {
 }
 
 .skill-open-button {
+  flex: 0 1 auto;
   padding: 0;
   min-width: 0;
+  overflow: hidden;
 }
 
 .skill-name {
@@ -1451,6 +1407,7 @@ onBeforeUnmount(() => {
 }
 
 .skill-inline-meta {
+  flex: 0 0 auto;
   gap: 6px;
   max-width: 100%;
   padding: 2px 8px;
@@ -1468,7 +1425,10 @@ onBeforeUnmount(() => {
   gap: 2px;
   align-items: center;
   min-width: 0;
-  flex-wrap: wrap;
+  max-width: 42%;
+  flex: 0 1 42%;
+  flex-wrap: nowrap;
+  overflow: hidden;
 }
 
 .skill-inline-meta span:last-child {
@@ -1516,8 +1476,14 @@ onBeforeUnmount(() => {
 }
 
 .skill-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: flex-end;
   margin-left: auto;
   flex-shrink: 0;
+  justify-self: end;
+  align-self: flex-start;
 }
 
 .skill-status-switch {
@@ -1565,28 +1531,43 @@ onBeforeUnmount(() => {
 
 .skill-description-box {
   position: relative;
+  display: flex;
+  flex-direction: column;
   flex: 0 0 90%;
   min-width: 0;
   width: 90%;
   max-width: 90%;
 }
 
-.skill-description {
-  margin: 0;
+.skill-description,
+.skill-description-copy {
   color: var(--text-soft);
   font-size: 13px;
   line-height: 1.5;
-  display: block;
   word-break: break-word;
+}
+
+.skill-description {
+  margin: 0;
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.skill-description.is-expanded {
+  display: block;
+  overflow: visible;
 }
 
 .skill-description-toggle {
   --el-button-text-color: var(--accent-info);
   --el-button-hover-text-color: var(--accent-info-strong);
   --el-button-active-text-color: var(--accent-info-strong);
+  align-self: flex-start;
   display: inline-flex;
   min-height: auto;
-  margin-left: 4px;
+  margin-top: 4px;
   padding: 0;
   color: var(--accent-info);
   font-size: inherit;
@@ -1602,8 +1583,10 @@ onBeforeUnmount(() => {
 
 .skill-description--measure {
   position: absolute;
-  inset: 0;
+  top: 0;
+  left: 0;
   display: block;
+  width: 100%;
   visibility: hidden;
   pointer-events: none;
   overflow: visible;
@@ -1718,6 +1701,7 @@ onBeforeUnmount(() => {
   .list-stats {
     flex-wrap: wrap;
   }
+
 }
 
 @media (max-width: 720px) {

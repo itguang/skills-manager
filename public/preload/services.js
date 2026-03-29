@@ -242,6 +242,7 @@ function readSkill (directory, entry) {
 
   if (!fileState) return null
 
+  const skillDirectoryStat = fs.statSync(skillDirectoryPath)
   const content = fs.readFileSync(fileState.skillFilePath, { encoding: 'utf-8' })
   const summary = extractSkillSummary(content)
 
@@ -253,6 +254,7 @@ function readSkill (directory, entry) {
     version: summary.version,
     tags: summary.tags,
     disabled: fileState.disabled,
+    createdAt: skillDirectoryStat.birthtimeMs || skillDirectoryStat.mtimeMs || 0,
     directoryId: directory.id,
     directoryLabel: directory.label,
     directoryPath: directory.resolvedPath,
@@ -312,7 +314,16 @@ function scanDirectory (directoryConfig, projectRoot) {
       resolvedPath: resolved.resolvedPath
     }, entry))
     .filter(Boolean)
-    .sort((left, right) => left.name.localeCompare(right.name, 'zh-Hans-CN'))
+    .sort((left, right) => {
+      if (left.createdAt !== right.createdAt) {
+        return right.createdAt - left.createdAt
+      }
+
+      const nameOrder = left.name.localeCompare(right.name, 'zh-Hans-CN')
+      if (nameOrder !== 0) return nameOrder
+
+      return left.directoryLabel.localeCompare(right.directoryLabel, 'zh-Hans-CN')
+    })
 
   const disabledSkills = skills.filter((skill) => skill.disabled).length
 
@@ -342,10 +353,14 @@ window.services = {
     }
 
     skills.sort((left, right) => {
-      if (left.name === right.name) {
-        return left.directoryLabel.localeCompare(right.directoryLabel, 'zh-Hans-CN')
+      if (left.createdAt !== right.createdAt) {
+        return right.createdAt - left.createdAt
       }
-      return left.name.localeCompare(right.name, 'zh-Hans-CN')
+
+      const nameOrder = left.name.localeCompare(right.name, 'zh-Hans-CN')
+      if (nameOrder !== 0) return nameOrder
+
+      return left.directoryLabel.localeCompare(right.directoryLabel, 'zh-Hans-CN')
     })
 
     return {
