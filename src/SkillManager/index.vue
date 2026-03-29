@@ -1,7 +1,7 @@
 <script lang="ts" setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { ElMessageBox } from 'element-plus'
-import { Back, Delete, Setting } from '@element-plus/icons-vue'
+import { Back, Delete, PriceTag, Setting, Tickets, User } from '@element-plus/icons-vue'
 
 const props = defineProps({
   enterAction: {
@@ -358,6 +358,27 @@ function getCollapsedSkillDescription (skill: any) {
   return collapsedSkillDescriptions.value[skill.id] || getSkillDescriptionText(skill)
 }
 
+function getSkillVersionText (skill: any) {
+  return typeof skill?.version === 'string' ? skill.version.trim() : ''
+}
+
+function getSkillAuthorText (skill: any) {
+  return typeof skill?.author === 'string' ? skill.author.trim() : ''
+}
+
+function getSkillTags (skill: any) {
+  const rawTags = Array.isArray(skill?.tags)
+    ? skill.tags
+    : typeof skill?.tags === 'string'
+      ? [skill.tags]
+      : []
+
+  return rawTags
+    .flatMap((tag: any) => (typeof tag === 'string' ? tag.split(/[,，]/) : []))
+    .map((tag: string) => tag.trim())
+    .filter(Boolean)
+}
+
 function buildCollapsedSkillDescription (element: HTMLElement, description: string) {
   const lineHeight = Number.parseFloat(window.getComputedStyle(element).lineHeight) || 16.2
   const maxHeight = lineHeight * DESCRIPTION_PREVIEW_LINE_COUNT + 1
@@ -542,7 +563,14 @@ const filteredSkills = computed(() => {
     if (statusFilter.value === 'disabled' && !skill.disabled) return false
     if (!keyword) return true
 
-    return `${skill.name} ${skill.description} ${skill.directoryLabel}`.toLowerCase().includes(keyword)
+    return [
+      skill.name,
+      skill.description,
+      skill.directoryLabel,
+      getSkillVersionText(skill),
+      getSkillAuthorText(skill),
+      getSkillTags(skill).join(' ')
+    ].join(' ').toLowerCase().includes(keyword)
   })
 })
 
@@ -747,9 +775,34 @@ onBeforeUnmount(() => {
                         >
                           <span class="skill-name">{{ skill.name }}</span>
                         </el-button>
-                        <el-tag effect="light" size="small" :type="skill.disabled ? 'danger' : 'success'">
-                          {{ skill.disabled ? '禁用' : '启用' }}
-                        </el-tag>
+                        <span
+                          v-if="getSkillVersionText(skill)"
+                          class="skill-inline-meta skill-inline-meta--version"
+                          :title="`版本 ${getSkillVersionText(skill)}`"
+                        >
+                          <el-icon><Tickets /></el-icon>
+                          <span>{{ getSkillVersionText(skill) }}</span>
+                        </span>
+                        <span
+                          v-if="getSkillAuthorText(skill)"
+                          class="skill-inline-meta"
+                          :title="getSkillAuthorText(skill)"
+                        >
+                          <el-icon><User /></el-icon>
+                          <span>{{ getSkillAuthorText(skill) }}</span>
+                        </span>
+                        <div v-if="getSkillTags(skill).length" class="skill-tag-list" :title="getSkillTags(skill).join('，')">
+                          <span class="skill-inline-meta skill-inline-meta--tag-icon">
+                            <el-icon><PriceTag /></el-icon>
+                          </span>
+                          <span
+                            v-for="tag in getSkillTags(skill)"
+                            :key="`${skill.id}-${tag}`"
+                            class="skill-tag-bubble"
+                          >
+                            {{ tag }}
+                          </span>
+                        </div>
                       </div>
 
                         <div class="skill-actions">
@@ -1357,7 +1410,8 @@ onBeforeUnmount(() => {
 
 .skill-title-row,
 .skill-title-main,
-.directory-card-meta {
+.directory-card-meta,
+.skill-inline-meta {
   display: flex;
   gap: 10px;
   align-items: center;
@@ -1371,6 +1425,7 @@ onBeforeUnmount(() => {
 
 .skill-title-main {
   flex: 1;
+  flex-wrap: wrap;
 }
 
 .skill-meta-row {
@@ -1393,6 +1448,63 @@ onBeforeUnmount(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.skill-inline-meta {
+  gap: 6px;
+  max-width: 100%;
+  padding: 2px 8px;
+  border: 1px solid color-mix(in srgb, var(--border) 88%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--surface-muted) 82%, transparent);
+  color: var(--text-soft);
+  font-size: 12px;
+  line-height: 1.35;
+  white-space: nowrap;
+}
+
+.skill-tag-list {
+  display: flex;
+  gap: 2px;
+  align-items: center;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.skill-inline-meta span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.skill-inline-meta :deep(svg) {
+  width: 13px;
+  height: 13px;
+}
+
+.skill-inline-meta--version {
+  color: color-mix(in srgb, var(--accent-info) 72%, var(--text-soft));
+}
+
+.skill-inline-meta--tag-icon {
+  padding: 2px 7px;
+  margin-right: -1px;
+}
+
+.skill-tag-bubble {
+  display: inline-flex;
+  align-items: center;
+  max-width: 180px;
+  min-width: 0;
+  padding: 2px 9px;
+  border: 1px solid color-mix(in srgb, var(--border) 92%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--surface-muted) 88%, transparent);
+  color: var(--text-soft);
+  font-size: 12px;
+  line-height: 1.35;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .skill-path {
