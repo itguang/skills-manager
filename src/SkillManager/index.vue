@@ -752,12 +752,13 @@ onBeforeUnmount(() => {
                         </el-tag>
                       </div>
 
-                      <div class="skill-actions">
-                        <el-switch
-                          :disabled="isSkillDeleting(skill.id)"
-                          :loading="isSkillSwitching(skill.id)"
-                          :model-value="!skill.disabled"
-                          active-text="启"
+                        <div class="skill-actions">
+                          <el-switch
+                            class="skill-status-switch"
+                            :disabled="isSkillDeleting(skill.id)"
+                            :loading="isSkillSwitching(skill.id)"
+                            :model-value="!skill.disabled"
+                            active-text="启"
                           inactive-text="停"
                           inline-prompt
                           @change="toggleSkillDisabled(skill)"
@@ -1407,6 +1408,43 @@ onBeforeUnmount(() => {
   flex-shrink: 0;
 }
 
+.skill-status-switch {
+  --el-switch-on-color: var(--switch-on);
+  --el-switch-off-color: var(--switch-off);
+}
+
+.skill-status-switch :deep(.el-switch__core) {
+  border: 1px solid transparent;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18);
+  transition: background-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.skill-status-switch :deep(.el-switch__inner .is-text) {
+  color: rgba(255, 255, 255, 0.96);
+  font-weight: 700;
+}
+
+.skill-status-switch.is-checked :deep(.el-switch__core) {
+  background: linear-gradient(135deg, var(--switch-on) 0%, var(--switch-on-strong) 100%);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--switch-on-strong) 58%, transparent),
+    0 0 18px color-mix(in srgb, var(--switch-on-strong) 34%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.22);
+}
+
+.skill-status-switch:not(.is-checked) :deep(.el-switch__core) {
+  background: linear-gradient(135deg, var(--switch-off) 0%, var(--switch-off-strong) 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.2),
+    0 0 0 1px rgba(148, 163, 184, 0.18);
+}
+
+.skill-status-switch :deep(.el-switch__action) {
+  box-shadow:
+    0 3px 12px rgba(15, 23, 42, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.56);
+}
+
 .skill-bottom {
   gap: 8px;
   justify-content: flex-start;
@@ -1431,11 +1469,21 @@ onBeforeUnmount(() => {
 }
 
 .skill-description-toggle {
+  --el-button-text-color: var(--accent-info);
+  --el-button-hover-text-color: var(--accent-info-strong);
+  --el-button-active-text-color: var(--accent-info-strong);
   display: inline-flex;
   min-height: auto;
   margin-left: 4px;
   padding: 0;
+  color: var(--accent-info);
+  font-weight: 400;
   vertical-align: baseline;
+}
+
+.skill-description-toggle:hover,
+.skill-description-toggle:focus-visible {
+  color: var(--accent-info-strong);
 }
 
 .skill-description--measure {
