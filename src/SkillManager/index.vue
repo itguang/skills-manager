@@ -749,18 +749,7 @@ onBeforeUnmount(() => {
                           <el-icon><User /></el-icon>
                           <span>{{ getSkillAuthorText(skill) }}</span>
                         </span>
-                        <div v-if="getSkillTags(skill).length" class="skill-tag-list" :title="getSkillTags(skill).join('，')">
-                          <span class="skill-inline-meta skill-inline-meta--tag-icon">
-                            <el-icon><PriceTag /></el-icon>
-                          </span>
-                          <span
-                            v-for="tag in getSkillTags(skill)"
-                            :key="`${skill.id}-${tag}`"
-                            class="skill-tag-bubble"
-                          >
-                            {{ tag }}
-                          </span>
-                        </div>
+
                       </div>
 
                       <div class="skill-actions">
@@ -792,6 +781,18 @@ onBeforeUnmount(() => {
                     <div class="skill-meta-row">
                       <el-tag effect="plain" size="small">{{ skill.directoryLabel || '未知目录' }}</el-tag>
                       <span class="skill-path" :title="getSkillDisplayPath(skill)">{{ getSkillDisplayPath(skill) }}</span>
+                      <div v-if="getSkillTags(skill).length" class="skill-tag-list" :title="getSkillTags(skill).join('，')">
+                          <span class="skill-inline-meta skill-inline-meta--tag-icon">
+                            <el-icon><PriceTag /></el-icon>
+                          </span>
+                        <span
+                            v-for="tag in getSkillTags(skill)"
+                            :key="`${skill.id}-${tag}`"
+                            class="skill-tag-bubble"
+                        >
+                            {{ tag }}
+                          </span>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -1427,7 +1428,7 @@ onBeforeUnmount(() => {
   flex: 0 0 auto;
   gap: 6px;
   max-width: 100%;
-  padding: 2px 8px;
+  padding: 2px 4px;
   border: 1px solid color-mix(in srgb, var(--border) 88%, transparent);
   border-radius: 999px;
   background: color-mix(in srgb, var(--surface-muted) 82%, transparent);
@@ -1463,8 +1464,12 @@ onBeforeUnmount(() => {
 }
 
 .skill-inline-meta--tag-icon {
-  padding: 2px 7px;
+  padding: 2px 2px;
   margin-right: -1px;
+}
+
+.skill-tag-list .skill-inline-meta--tag-icon + .skill-tag-bubble {
+  margin-left: -2px;
 }
 
 .skill-tag-bubble {
@@ -1472,7 +1477,7 @@ onBeforeUnmount(() => {
   align-items: center;
   max-width: 180px;
   min-width: 0;
-  padding: 2px 9px;
+  padding: 2px 2px;
   border: 1px solid color-mix(in srgb, var(--border) 92%, transparent);
   border-radius: 999px;
   background: color-mix(in srgb, var(--surface-muted) 88%, transparent);
