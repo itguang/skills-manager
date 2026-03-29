@@ -1,7 +1,7 @@
 <script lang="ts" setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Back, Delete, Setting, Tickets, User } from '@element-plus/icons-vue'
+import { Back, Delete, PriceTag, Setting, Tickets, User } from '@element-plus/icons-vue'
 
 const props = defineProps({
   enterAction: {
@@ -750,6 +750,9 @@ onBeforeUnmount(() => {
                           <span>{{ getSkillAuthorText(skill) }}</span>
                         </span>
                         <div v-if="getSkillTags(skill).length" class="skill-tag-list" :title="getSkillTags(skill).join('，')">
+                          <span class="skill-tag-icon">
+                            <el-icon><PriceTag /></el-icon>
+                          </span>
                           <el-tag
                             v-for="tag in getSkillTags(skill)"
                             :key="`${skill.id}-${tag}`"
@@ -1447,6 +1450,18 @@ onBeforeUnmount(() => {
   flex: 0 1 42%;
   flex-wrap: nowrap;
   overflow: hidden;
+}
+
+.skill-tag-icon {
+  display: inline-flex;
+  align-items: center;
+  color: var(--accent-info);
+  flex: 0 0 auto;
+}
+
+.skill-tag-icon :deep(svg) {
+  width: 12px;
+  height: 12px;
 }
 
 .skill-tag {
