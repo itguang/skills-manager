@@ -62,7 +62,7 @@ function extractFrontmatter (content) {
   if (!content) return ''
 
   const normalized = content.replace(/\r\n/g, '\n')
-  const frontmatterMatch = normalized.match(/^---\n([\s\S]*?)\n---\n?/)
+  const frontmatterMatch = normalized.match(/^(?:\uFEFF)?---\s*\n([\s\S]*?)\n---(?:\s*\n|$)/)
 
   return frontmatterMatch ? frontmatterMatch[1] : ''
 }
@@ -112,7 +112,7 @@ function extractFieldBlock (lines, key, options = {}) {
   }
 }
 
-function parseTagsValue (value, childLines = []) {
+function parseStringListValue (value, childLines = []) {
   const normalizedValue = stripWrappingQuotes(value)
 
   if (normalizedValue) {
@@ -141,36 +141,43 @@ function extractSkillFrontmatterMetadata (content) {
   const frontmatter = extractFrontmatter(content)
   if (!frontmatter) {
     return {
+      name: '',
       description: '',
       author: '',
       version: '',
+      category: '',
       tags: []
     }
   }
 
   const lines = frontmatter.split('\n')
+  const nameBlock = extractFieldBlock(lines, 'name', { topLevelOnly: true })
   const metadataBlock = extractFieldBlock(lines, 'metadata', { topLevelOnly: true })
   const descriptionBlock = extractFieldBlock(lines, 'description', { topLevelOnly: true })
-  const authorBlock = extractFieldBlock(metadataBlock.childLines, 'author')
-  const versionBlock = extractFieldBlock(metadataBlock.childLines, 'version')
-  const tagsBlock = extractFieldBlock(metadataBlock.childLines, 'tags')
-  const fallbackAuthorBlock = extractFieldBlock(lines, 'author', { topLevelOnly: true })
-  const fallbackVersionBlock = extractFieldBlock(lines, 'version', { topLevelOnly: true })
-  const fallbackTagsBlock = extractFieldBlock(lines, 'tags', { topLevelOnly: true })
+  const authorTopLevelBlock = extractFieldBlock(lines, 'author', { topLevelOnly: true })
+  const authorMetadataBlock = extractFieldBlock(metadataBlock.childLines, 'author')
+  const versionTopLevelBlock = extractFieldBlock(lines, 'version', { topLevelOnly: true })
+  const versionMetadataBlock = extractFieldBlock(metadataBlock.childLines, 'version')
+  const categoryTopLevelBlock = extractFieldBlock(lines, 'category', { topLevelOnly: true })
+  const categoryMetadataBlock = extractFieldBlock(metadataBlock.childLines, 'category')
+  const tagsTopLevelBlock = extractFieldBlock(lines, 'tags', { topLevelOnly: true })
+  const tagsMetadataBlock = extractFieldBlock(metadataBlock.childLines, 'tags')
 
   return {
+    name: nameBlock.value,
     description: descriptionBlock.value,
-    author: authorBlock.value || fallbackAuthorBlock.value,
-    version: versionBlock.value || fallbackVersionBlock.value,
-    tags: parseTagsValue(
-      tagsBlock.value || fallbackTagsBlock.value,
-      tagsBlock.childLines.length > 0 ? tagsBlock.childLines : fallbackTagsBlock.childLines
+    author: authorTopLevelBlock.value || authorMetadataBlock.value,
+    version: versionTopLevelBlock.value || versionMetadataBlock.value,
+    category: categoryTopLevelBlock.value || categoryMetadataBlock.value,
+    tags: parseStringListValue(
+      tagsTopLevelBlock.value || tagsMetadataBlock.value,
+      tagsTopLevelBlock.childLines.length > 0 ? tagsTopLevelBlock.childLines : tagsMetadataBlock.childLines
     )
   }
 }
 
 function extractBodyDescription (normalizedContent) {
-  const body = normalizedContent.replace(/^---\n[\s\S]*?\n---\n?/, '')
+  const body = normalizedContent.replace(/^(?:\uFEFF)?---\s*\n[\s\S]*?\n---(?:\s*\n|$)/, '')
   const lines = body.split('\n')
   let inCodeBlock = false
 
@@ -197,9 +204,11 @@ function extractBodyDescription (normalizedContent) {
 function extractSkillSummary (content) {
   if (!content) {
     return {
+      name: '',
       description: '暂无描述',
       author: '',
       version: '',
+      category: '',
       tags: []
     }
   }
@@ -208,9 +217,11 @@ function extractSkillSummary (content) {
   const metadata = extractSkillFrontmatterMetadata(normalized)
 
   return {
+    name: metadata.name,
     description: metadata.description || extractBodyDescription(normalized),
     author: metadata.author,
     version: metadata.version,
+    category: metadata.category,
     tags: metadata.tags
   }
 }
@@ -248,10 +259,11 @@ function readSkill (directory, entry) {
 
   return {
     id: `${directory.id}:${entry.name}`,
-    name: entry.name,
+    name: summary.name || entry.name,
     description: summary.description,
     author: summary.author,
     version: summary.version,
+    category: summary.category,
     tags: summary.tags,
     disabled: fileState.disabled,
     createdAt: skillDirectoryStat.birthtimeMs || skillDirectoryStat.mtimeMs || 0,
