@@ -1,7 +1,7 @@
 <script lang="ts" setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Back, Delete, DocumentCopy, FolderOpened, PriceTag, Setting, Tickets, User } from '@element-plus/icons-vue'
+import { Back, Delete, DocumentCopy, FolderOpened, PriceTag, Setting, Tickets, User, Collection } from '@element-plus/icons-vue'
 
 const props = defineProps({
   enterAction: {
@@ -790,8 +790,21 @@ onBeforeUnmount(() => {
                           <el-icon><User /></el-icon>
                           <span>{{ getSkillAuthorText(skill) }}</span>
                         </span>
-                        <div v-if="getSkillTags(skill).length" class="skill-tag-list" :title="getSkillTags(skill).join('，')">
-                          <span class="skill-tag-icon">
+                        <div v-if="getSkillTags(skill).length || skill.category" class="skill-tag-list">
+                          <el-tag
+                            v-if="skill.category"
+                            class="skill-tag skill-tag--category"
+                            type="info"
+                            effect="light"
+                            size="small"
+                            round
+                          >
+                            <span class="skill-tag-content">
+                              <el-icon><Collection /></el-icon>
+                              <span>{{ skill.category }}</span>
+                            </span>
+                          </el-tag>
+                          <span v-if="getSkillTags(skill).length" class="skill-tag-icon">
                             <el-icon><PriceTag /></el-icon>
                           </span>
                           <el-tag
@@ -1524,6 +1537,95 @@ onBeforeUnmount(() => {
 .skill-tag {
   max-width: 180px;
   min-width: 0;
+}
+
+.skill-tag--category {
+  flex: 0 0 auto;
+}
+
+.skill-tag :deep(.el-tag__content) {
+  display: block;
+  min-width: 0;
+  font-size: 11px;
+  line-height: 1.2;
+}
+
+.skill-tag-content {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.skill-tag-content :deep(.el-icon) {
+  flex: 0 0 auto;
+}
+
+.skill-tag-content :deep(svg) {
+  width: 12px;
+  height: 12px;
+}
+
+.skill-tag-text {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.skill-tag--category {
+  flex: 0 0 auto;
+}
+
+.skill-tag :deep(.el-tag__content) {
+  display: block;
+  min-width: 0;
+  font-size: 11px;
+  line-height: 1.2;
+}
+
+.skill-tag-content {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.skill-tag-content :deep(.el-icon) {
+  flex: 0 0 auto;
+}
+
+.skill-tag-content :deep(svg) {
+  width: 12px;
+  height: 12px;
+}
+
+.skill-tag-text {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.skill-tag-icon {
+  display: inline-flex;
+  align-items: center;
+  color: var(--accent-info);
+  flex: 0 0 auto;
+}
+
+.skill-tag-icon :deep(svg) {
+  width: 12px;
+  height: 12px;
+}
+
+.skill-tag-icon {
+  display: inline-flex;
+  align-items: center;
+  color: var(--accent-info);
+  flex: 0 0 auto;
 }
 
 .skill-tag :deep(.el-tag__content) {
