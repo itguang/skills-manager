@@ -63,14 +63,14 @@ npm run build
 
 ```vue
 <script lang="ts" setup>
-import { ref, watch, onMounted } from 'vue'
+  import { ref, watch, onMounted } from 'vue'
 
-const props = defineProps({ enterAction: Object })
-const state = ref('')
+  const props = defineProps({ enterAction: Object })
+  const state = ref('')
 
-onMounted(() => { /* init */ })
+  onMounted(() => { /* init */ })
 
-watch(() => props.enterAction, (val) => { /* handle */ }, { immediate: true })
+  watch(() => props.enterAction, (val) => { /* handle */ }, { immediate: true })
 </script>
 
 <template>
@@ -78,7 +78,7 @@ watch(() => props.enterAction, (val) => { /* handle */ }, { immediate: true })
 </template>
 
 <style scoped>
-/* styles */
+  /* styles */
 </style>
 ```
 
@@ -88,6 +88,13 @@ watch(() => props.enterAction, (val) => { /* handle */ }, { immediate: true })
 - 变量/函数：`camelCase`
 - 常量：`UPPER_SNAKE_CASE`
 - 类名：`PascalCase`
+
+#### 排版要求
+
+- 前端 UI 默认强制优先节省排版空间；同一信息密度能在一行内完成时，不要擅自拆到多行。
+- 优先通过截断、限制宽度、压缩间距、保持操作区贴边等方式解决空间问题，而不是增加垂直层级。
+- 对技能列表卡片，`skill-name`、版本、作者、标签、右侧操作按钮应优先保持同一行展示；未经明确要求，不要改成两行布局。
+- 操作按钮容器默认靠右对齐展示（含小屏场景）；未经明确要求，不要左对齐操作区。
 
 #### 导入顺序
 

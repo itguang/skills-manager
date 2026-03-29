@@ -1,6 +1,6 @@
 <script lang="ts" setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { ElMessageBox } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { Back, Delete, PriceTag, Setting, Tickets, User } from '@element-plus/icons-vue'
 
 const props = defineProps({
@@ -241,6 +241,16 @@ async function refreshSkills () {
   } finally {
     isLoading.value = false
   }
+}
+
+async function handleQueryClick () {
+  await refreshSkills()
+  if (errorMessage.value) {
+    ElMessage.error(errorMessage.value)
+    return
+  }
+
+  ElMessage.success(`查询完成，共 ${filteredSkills.value.length} 条`)
 }
 
 function openSettings () {
@@ -658,7 +668,7 @@ onBeforeUnmount(() => {
                 />
               </el-select>
 
-              <el-button :loading="isLoading" type="primary" @click="refreshSkills" style="height: 38px;">查询</el-button>
+              <el-button :loading="isLoading" type="primary" @click="handleQueryClick" style="height: 38px;">查询</el-button>
             </div>
         </section>
 
@@ -1055,6 +1065,11 @@ onBeforeUnmount(() => {
   min-width: 0;
 }
 
+.skill-main {
+  flex: 1 1 auto;
+  width: 100%;
+}
+
 .page-copy--compact {
   position: relative;
   z-index: 1;
@@ -1160,6 +1175,7 @@ onBeforeUnmount(() => {
   display: flex;
   gap: 8px;
   align-items: center;
+  justify-content: flex-end;
 }
 
 .list-header-actions {
@@ -1374,6 +1390,7 @@ onBeforeUnmount(() => {
   gap: 10px;
   align-items: center;
   min-width: 0;
+  width: 100%;
 }
 
 .skill-title-main {
@@ -1682,11 +1699,11 @@ onBeforeUnmount(() => {
   }
 
   .page-actions,
-  .list-stats,
   .settings-actions,
   .directory-card-actions,
-  .skill-actions {
-    justify-content: flex-start;
+  .skill-actions,
+  .project-root-input-actions {
+    justify-content: flex-end;
   }
 
   .list-header-top {
