@@ -141,6 +141,7 @@ const skills = ref<any[]>([])
 const skillKeyword = ref('')
 const selectedDirectoryIds = ref<string[]>([])
 const statusFilter = ref<'all' | 'enabled' | 'disabled'>('all')
+const categoryKeyword = ref('')
 const isLoading = ref(false)
 const errorMessage = ref('')
 const skillSwitchingIds = ref<string[]>([])
@@ -533,12 +534,14 @@ async function removeSkill (skill: any) {
 
 const filteredSkills = computed(() => {
   const keyword = skillKeyword.value.trim().toLowerCase()
+  const category = categoryKeyword.value.trim().toLowerCase()
   const selectedIds = new Set(selectedDirectoryIds.value)
 
   return skills.value.filter((skill) => {
     if (selectedIds.size > 0 && !selectedIds.has(skill.directoryId)) return false
     if (statusFilter.value === 'enabled' && skill.disabled) return false
     if (statusFilter.value === 'disabled' && !skill.disabled) return false
+    if (category && !skill.category?.toLowerCase().includes(category)) return false
     if (!keyword) return true
 
     return [
@@ -671,6 +674,13 @@ onBeforeUnmount(() => {
                   :value="option.value"
                 />
               </el-select>
+
+              <el-input
+                v-model="categoryKeyword"
+                class="toolbar-category"
+                clearable
+                placeholder="筛选分类"
+              />
 
               <el-select
                 v-model="statusFilter"
@@ -1266,7 +1276,7 @@ onBeforeUnmount(() => {
 
 .hero-toolbar-bottom {
   display: grid;
-  grid-template-columns: minmax(0, 1.2fr) minmax(220px, 0.9fr) minmax(180px, 0.5fr) auto;
+  grid-template-columns: minmax(0, 1.2fr) minmax(220px, 0.9fr) minmax(180px, 0.7fr) minmax(180px, 0.5fr) auto;
   gap: 10px;
   align-items: center;
   position: relative;
@@ -1744,7 +1754,7 @@ onBeforeUnmount(() => {
   }
 
   .hero-toolbar-bottom {
-    grid-template-columns: minmax(0, 1fr) minmax(220px, 0.8fr) minmax(180px, 0.5fr) auto;
+    grid-template-columns: minmax(0, 1fr) minmax(220px, 0.8fr) minmax(180px, 0.7fr) minmax(180px, 0.5fr) auto;
   }
 
   .list-header,
