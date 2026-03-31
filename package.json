@@ -13,6 +13,6 @@
     "unplugin-auto-import": "^21.0.0",
     "unplugin-vue-components": "^32.0.0",
     "utools-api-types": "^7.5.1",
-    "vite": "^6.0.11"
+    "vite": "^6.4.1"
   }
 }
