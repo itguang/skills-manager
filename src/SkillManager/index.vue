@@ -2,6 +2,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Back, Delete, DocumentCopy, FolderOpened, PriceTag, Setting, Tickets, User, Collection } from '@element-plus/icons-vue'
+import { getSkillTags, getVisibleSkillTags } from './skillTagUtils.js'
 
 const props = defineProps({
   enterAction: {
@@ -392,19 +393,6 @@ function getSkillAuthorText (skill: any) {
   return typeof skill?.author === 'string' ? skill.author.trim() : ''
 }
 
-function getSkillTags (skill: any) {
-  const rawTags = Array.isArray(skill?.tags)
-    ? skill.tags
-    : typeof skill?.tags === 'string'
-      ? [skill.tags]
-      : []
-
-  return rawTags
-    .flatMap((tag: any) => (typeof tag === 'string' ? tag.split(/[,，]/) : []))
-    .map((tag: string) => tag.trim())
-    .filter(Boolean)
-}
-
 function setSkillDescriptionMeasureRef (skillId: string) {
   return (element: Element | null) => {
     if (element instanceof HTMLElement) {
@@ -554,6 +542,18 @@ const filteredSkills = computed(() => {
     ].join(' ').toLowerCase().includes(keyword)
   })
 })
+
+const visibleSkillTagsMap = computed(() => {
+  const map = new Map<any, string[]>()
+  for (const skill of skills.value) {
+    map.set(skill, getVisibleSkillTags(skill))
+  }
+  return map
+})
+
+function getCachedVisibleSkillTags (skill: any) {
+  return visibleSkillTagsMap.value.get(skill) ?? []
+}
 
 const healthyDirectoryCount = computed(() => scannedDirectories.value.filter((directory) => !directory.reason).length)
 
@@ -790,7 +790,7 @@ onBeforeUnmount(() => {
                           <el-icon><User /></el-icon>
                           <span>{{ getSkillAuthorText(skill) }}</span>
                         </span>
-                        <div v-if="getSkillTags(skill).length || skill.category" class="skill-tag-list">
+                        <div v-if="getCachedVisibleSkillTags(skill).length || skill.category" class="skill-tag-list">
                           <el-tag
                             v-if="skill.category"
                             class="skill-tag skill-tag--category"
@@ -804,11 +804,11 @@ onBeforeUnmount(() => {
                               <span>{{ skill.category }}</span>
                             </span>
                           </el-tag>
-                          <span v-if="getSkillTags(skill).length" class="skill-tag-icon">
+                          <span v-if="getCachedVisibleSkillTags(skill).length" class="skill-tag-icon">
                             <el-icon><PriceTag /></el-icon>
                           </span>
                           <el-tag
-                            v-for="tag in getSkillTags(skill)"
+                            v-for="tag in getCachedVisibleSkillTags(skill)"
                             :key="`${skill.id}-${tag}`"
                             class="skill-tag"
                             type="primary"
