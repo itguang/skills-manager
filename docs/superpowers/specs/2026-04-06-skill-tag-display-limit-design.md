@@ -1,56 +1,56 @@
-# Skill Tag Display Limit Design
+# Skill 标签展示数量限制设计
 
-## Summary
+## 概要
 
-Limit the number of regular tags shown in the skill list to at most 5 per skill card.
-The category tag remains visible when present and does not count toward the 5-tag limit.
+将技能列表中普通标签的展示数量限制为每张技能卡片最多 5 个。
+如果技能存在分类标签，则继续显示，并且不计入这 5 个普通标签名额。
 
-## Current State
+## 当前状态
 
-The skill list in `src/SkillManager/index.vue` renders:
+当前 `src/SkillManager/index.vue` 中的技能列表会渲染：
 
-- one category tag from `skill.category`
-- all regular tags returned by `getSkillTags(skill)`
+- 来自 `skill.category` 的一个分类标签
+- `getSkillTags(skill)` 返回的全部普通标签
 
-This can make a single row too wide when a skill contains many tags.
+当某个技能标签过多时，会让单行内容过宽，影响当前紧凑布局。
 
-## Goal
+## 目标
 
-Keep the existing compact single-line layout by capping visible regular tags while preserving:
+在保持现有单行紧凑展示风格的前提下，为普通标签增加数量上限，同时不改变以下行为：
 
-- current category tag rendering
-- current tag parsing and normalization behavior
-- current metadata layout for name, version, author, and actions
+- 分类标签的现有渲染方式
+- 普通标签的解析与标准化逻辑
+- 名称、版本、作者、操作区等元信息布局
 
-## Approach
+## 方案
 
-Use a presentation-layer limit instead of mutating source data.
+采用展示层截断，而不是在源数据层直接裁剪标签。
 
-### Data Handling
+### 数据处理
 
-- Keep `getSkillTags(skill)` responsible for parsing and normalizing raw tag metadata.
-- Add a `MAX_VISIBLE_SKILL_TAGS = 5` constant.
-- Add `getVisibleSkillTags(skill)` that returns `getSkillTags(skill).slice(0, MAX_VISIBLE_SKILL_TAGS)`.
+- 保留 `getSkillTags(skill)`，继续负责原始标签数据的解析与标准化。
+- 新增 `MAX_VISIBLE_SKILL_TAGS = 5` 常量。
+- 新增 `getVisibleSkillTags(skill)`，内部返回 `getSkillTags(skill).slice(0, MAX_VISIBLE_SKILL_TAGS)`。
 
-### Rendering
+### 渲染方式
 
-- Continue rendering `skill.category` independently.
-- Render regular tags from `getVisibleSkillTags(skill)`.
-- Use the visible-tag result for any conditional UI related to the regular-tag area so the icon and tags stay in sync.
+- `skill.category` 继续单独渲染。
+- 普通标签改为使用 `getVisibleSkillTags(skill)` 的结果进行渲染。
+- 普通标签区域相关的条件判断也同步使用截断后的结果，确保标签图标和标签内容显示一致。
 
-## Rejected Alternatives
+## 备选方案与取舍
 
-### Slice directly in the template
+### 方案一：直接在模板中写 `slice(0, 5)`
 
-This is the smallest code diff but makes the template noisier and repeats tag computation logic.
+这是最小改动，但会让模板表达式变得更重，也会重复标签计算逻辑，可读性一般。
 
-### Truncate tags during scan or normalization
+### 方案二：在扫描或标准化阶段直接裁剪标签
 
-This would discard original metadata too early and makes future enhancements harder, such as showing all tags elsewhere.
+这会过早丢失原始标签数据，不利于未来扩展，例如后续增加“查看全部标签”之类的展示能力。
 
-## Validation
+## 验证方式
 
-- Build the project with `npm run build`.
-- Confirm that a skill with more than 5 regular tags shows only the first 5 regular tags.
-- Confirm that `skill.category` still renders even when 5 regular tags are already shown.
-- Confirm that skills with fewer than 5 regular tags are unaffected.
+- 执行 `npm run build`，确认项目可以正常构建。
+- 确认当某个技能拥有超过 5 个普通标签时，列表中只展示前 5 个普通标签。
+- 确认即使已经展示了 5 个普通标签，`skill.category` 仍然会正常显示。
+- 确认普通标签少于 5 个的技能不受影响。
