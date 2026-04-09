@@ -749,79 +749,91 @@ onBeforeUnmount(() => {
                 :style="{ '--item-index': index }"
                 :class="['skill-card', { 'is-disabled': skill.disabled }]"
                 shadow="hover"
-              >
-                <div class="skill-top">
-                  <div class="skill-main">
-                    <div class="skill-title-row">
-                      <div class="skill-title-main">
-                        <el-button
-                          class="skill-open-button"
-                          :title="skill.skillDirPath"
-                          link
-                          type="primary"
-                          @click="openSkillDirectory(skill)"
-                        >
-                          <el-icon><FolderOpened /></el-icon>
-                        </el-button>
-                        <span class="skill-name" :title="skill.name">{{ skill.name }}</span>
-                        <el-button
-                          class="skill-copy-button"
-                          :aria-label="`复制 ${skill.name}`"
-                          link
-                          type="primary"
-                          title="复制名称"
-                          @click="copySkillName(skill)"
-                        >
-                          <el-icon><DocumentCopy /></el-icon>
-                        </el-button>
-                        <span
-                          v-if="getSkillVersionText(skill)"
-                          class="skill-inline-meta skill-inline-meta--version"
-                          :title="`版本 ${getSkillVersionText(skill)}`"
-                        >
-                          <el-icon><Tickets /></el-icon>
-                          <span>{{ getSkillVersionText(skill) }}</span>
-                        </span>
-                        <span
-                          v-if="getSkillAuthorText(skill)"
-                          class="skill-inline-meta"
-                          :title="getSkillAuthorText(skill)"
-                        >
-                          <el-icon><User /></el-icon>
-                          <span>{{ getSkillAuthorText(skill) }}</span>
-                        </span>
-                        <div v-if="getCachedVisibleSkillTags(skill).length || skill.category" class="skill-tag-list">
-                          <el-tag
-                            v-if="skill.category"
-                            class="skill-tag skill-tag--category"
-                            type="info"
-                            effect="light"
-                            size="small"
-                            round
-                          >
-                            <span class="skill-tag-content">
-                              <el-icon><Collection /></el-icon>
-                              <span>{{ skill.category }}</span>
-                            </span>
-                          </el-tag>
-                          <span v-if="getCachedVisibleSkillTags(skill).length" class="skill-tag-icon">
-                            <el-icon><PriceTag /></el-icon>
-                          </span>
-                          <el-tag
-                            v-for="tag in getCachedVisibleSkillTags(skill)"
-                            :key="`${skill.id}-${tag}`"
-                            class="skill-tag"
-                            type="primary"
-                            effect="light"
-                            size="small"
-                            round
-                          >
-                            <span class="skill-tag-text">{{ tag }}</span>
-                          </el-tag>
-                        </div>
-                      </div>
+                >
+                  <div class="skill-top">
+                    <div class="skill-main">
+                      <div class="skill-title-row">
+                        <div class="skill-title-main">
+                          <div class="skill-title-top">
+                            <el-button
+                              class="skill-open-button"
+                              :title="skill.skillDirPath"
+                              link
+                              type="primary"
+                              @click="openSkillDirectory(skill)"
+                            >
+                              <el-icon><FolderOpened /></el-icon>
+                            </el-button>
+                            <div class="skill-title-leading">
+                              <span class="skill-name" :title="skill.name">{{ skill.name }}</span>
+                              <el-button
+                                class="skill-copy-button"
+                                :aria-label="`复制 ${skill.name}`"
+                                link
+                                type="primary"
+                                title="复制名称"
+                                @click="copySkillName(skill)"
+                              >
+                                <el-icon><DocumentCopy /></el-icon>
+                              </el-button>
+                              <span
+                                v-if="getSkillVersionText(skill)"
+                                class="skill-inline-meta skill-inline-meta--version"
+                                :title="`版本 ${getSkillVersionText(skill)}`"
+                              >
+                                <el-icon><Tickets /></el-icon>
+                                <span>{{ getSkillVersionText(skill) }}</span>
+                              </span>
+                              <span
+                                v-if="getSkillAuthorText(skill)"
+                                class="skill-inline-meta"
+                                :title="getSkillAuthorText(skill)"
+                              >
+                                <el-icon><User /></el-icon>
+                                <span>{{ getSkillAuthorText(skill) }}</span>
+                              </span>
+                            </div>
+                          </div>
 
-                      <div class="skill-actions">
+                          <div class="skill-title-bottom">
+                            <div class="skill-directory-row">
+                              <el-tag effect="plain" size="small">{{ skill.directoryLabel || '未知目录' }}</el-tag>
+                              <span class="skill-path" :title="getSkillDisplayPath(skill)">{{ getSkillDisplayPath(skill) }}</span>
+                            </div>
+
+                            <div v-if="getCachedVisibleSkillTags(skill).length || skill.category" class="skill-tags-row">
+                              <el-tag
+                                v-if="skill.category"
+                                class="skill-tag skill-tag--category"
+                                type="info"
+                                effect="light"
+                                size="small"
+                                round
+                              >
+                                <span class="skill-tag-content">
+                                  <el-icon><Collection /></el-icon>
+                                  <span>{{ skill.category }}</span>
+                                </span>
+                              </el-tag>
+                              <span v-if="getCachedVisibleSkillTags(skill).length" class="skill-tag-icon">
+                                <el-icon><PriceTag /></el-icon>
+                              </span>
+                              <el-tag
+                                v-for="tag in getCachedVisibleSkillTags(skill)"
+                                :key="`${skill.id}-${tag}`"
+                                class="skill-tag"
+                                type="primary"
+                                effect="light"
+                                size="small"
+                                round
+                              >
+                                <span class="skill-tag-text">{{ tag }}</span>
+                              </el-tag>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div class="skill-actions">
                         <el-switch
                           class="skill-status-switch"
                           :disabled="isSkillDeleting(skill.id)"
@@ -843,16 +855,11 @@ onBeforeUnmount(() => {
                           title="删除"
                           type="danger"
                           @click="removeSkill(skill)"
-                        />
+                          />
+                        </div>
                       </div>
                     </div>
-
-                    <div class="skill-meta-row">
-                      <el-tag effect="plain" size="small">{{ skill.directoryLabel || '未知目录' }}</el-tag>
-                      <span class="skill-path" :title="getSkillDisplayPath(skill)">{{ getSkillDisplayPath(skill) }}</span>
-                    </div>
                   </div>
-                </div>
 
                 <div class="skill-bottom">
                   <div class="skill-description-box">
@@ -1096,7 +1103,6 @@ onBeforeUnmount(() => {
 .directory-section-header,
 .directory-card-header,
 .skill-top,
-.skill-meta-row,
 .skill-bottom,
 .settings-actions {
   display: flex;
@@ -1433,9 +1439,12 @@ onBeforeUnmount(() => {
   animation-delay: calc(var(--item-index, 0) * 0.03s);
 }
 
-.skill-title-main,
 .directory-card-meta,
-.skill-inline-meta {
+.skill-inline-meta,
+.skill-title-top,
+.skill-title-leading,
+.skill-title-bottom,
+.skill-directory-row {
   display: flex;
   gap: 10px;
   align-items: center;
@@ -1452,14 +1461,34 @@ onBeforeUnmount(() => {
 }
 
 .skill-title-main {
-  flex: 1;
-  flex-wrap: nowrap;
+  display: grid;
+  gap: 8px;
+  align-content: start;
+  overflow: hidden;
+  width: 100%;
+}
+
+.skill-title-top,
+.skill-title-bottom {
+  width: 100%;
   overflow: hidden;
 }
 
-.skill-meta-row {
+.skill-title-top {
+  flex-wrap: nowrap;
+}
+
+.skill-title-leading {
+  flex: 1 1 auto;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+  scrollbar-gutter: stable;
+}
+
+.skill-title-bottom {
   gap: 8px;
-  flex-wrap: wrap;
   justify-content: flex-start;
 }
 
@@ -1477,14 +1506,14 @@ onBeforeUnmount(() => {
 
 .skill-name {
   display: inline-block;
-  flex: 0 1 auto;
-  min-width: 0;
-  max-width: 320px;
+  flex: 0 0 auto;
+  min-width: auto;
+  max-width: none;
   font-size: 16px;
   font-weight: 700;
   line-height: 1.2;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  overflow: visible;
+  text-overflow: clip;
   white-space: nowrap;
   user-select: text;
   -webkit-user-select: text;
@@ -1500,7 +1529,7 @@ onBeforeUnmount(() => {
 .skill-inline-meta {
   flex: 0 0 auto;
   gap: 6px;
-  max-width: 100%;
+  max-width: none;
   padding: 2px 8px;
   border: 1px solid color-mix(in srgb, var(--border) 88%, transparent);
   border-radius: 999px;
@@ -1511,14 +1540,21 @@ onBeforeUnmount(() => {
   white-space: nowrap;
 }
 
-.skill-tag-list {
+.skill-tags-row {
   display: flex;
-  gap: 2px;
+  gap: 4px;
   align-items: center;
   min-width: 0;
-  max-width: 42%;
-  flex: 0 1 42%;
+  flex: 0 1 auto;
   flex-wrap: nowrap;
+  overflow: hidden;
+  padding-left: 6px;
+  border-left: 1px solid color-mix(in srgb, var(--border) 78%, transparent);
+}
+
+.skill-directory-row {
+  flex: 0 1 auto;
+  max-width: min(520px, 72%);
   overflow: hidden;
 }
 
@@ -1644,8 +1680,8 @@ onBeforeUnmount(() => {
 }
 
 .skill-inline-meta span:last-child {
-  overflow: hidden;
-  text-overflow: ellipsis;
+  overflow: visible;
+  text-overflow: clip;
 }
 
 .skill-inline-meta :deep(svg) {
@@ -1658,6 +1694,7 @@ onBeforeUnmount(() => {
 }
 
 .skill-path {
+  flex: 1 1 auto;
   min-width: 0;
   font-size: 12px;
   overflow: hidden;
