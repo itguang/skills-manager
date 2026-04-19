@@ -4,7 +4,6 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { Back, Delete, DocumentCopy, FolderOpened, PriceTag, Setting, Tickets, User, Collection } from '@element-plus/icons-vue'
 import { getSkillTags, getVisibleSkillTags } from './skillTagUtils.js'
 import { STORAGE_KEYS } from '../storageKeys.js'
-import SkillPackage from '../SkillPackage/index.vue'
 
 const props = defineProps({
   enterAction: {
@@ -131,7 +130,7 @@ function mergeDirectoryConfigs (savedConfigs: any[]) {
   return mergedDefaults
 }
 
-const currentView = ref<'list' | 'settings' | 'package'>('list')
+const currentView = ref<'list' | 'settings'>('list')
 const projectRoot = ref('')
 const directoryConfigs = ref<any[]>([])
 const scannedDirectories = ref<any[]>([])
@@ -148,7 +147,6 @@ const expandedSkillDescriptionIds = ref<string[]>([])
 const overflowingSkillDescriptionIds = ref<string[]>([])
 const skillDescriptionMeasureElements = new Map<string, HTMLElement>()
 const homeDirectory = ref('')
-const activeSkillPackage = ref<any>(null)
 
 function persistSettings () {
   const normalizedProjectRoot = typeof projectRoot.value === 'string' ? projectRoot.value.trim() : ''
@@ -251,18 +249,53 @@ function openSkillPackage (skill: any) {
     return
   }
 
-  activeSkillPackage.value = {
+  window.utools.dbStorage.setItem(STORAGE_KEYS.activeSkillPackage, {
     skillId: skill.id,
     skillName,
     skillPath: skillDirPath
-  }
-  currentView.value = 'package'
-}
+  })
 
-async function closeSkillPackage () {
-  activeSkillPackage.value = null
-  currentView.value = 'list'
-  await refreshSkills()
+  const globalWindow = window as any
+  const previousWindow = globalWindow.__skillsManagerSkillPackageWindow
+
+  try {
+    if (previousWindow && typeof previousWindow.isDestroyed === 'function' && !previousWindow.isDestroyed()) {
+      previousWindow.close()
+    }
+  } catch (error) {
+  }
+
+  const skillPackageWindow = window.utools.createBrowserWindow(
+    'index.html',
+    {
+      show: false,
+      title: `Skill Manager / ${skillName}`,
+      width: 900,
+      height: 750,
+      minWidth: 900,
+      minHeight: 750,
+      resizable: true,
+      minimizable: true,
+      maximizable: true,
+      center: true,
+      autoHideMenuBar: true,
+      closeable: true,
+      webPreferences: {
+        preload: 'preload/services.js'
+      }
+    },
+    () => {
+      if (typeof skillPackageWindow.show === 'function') {
+        skillPackageWindow.show()
+      }
+
+      if (typeof skillPackageWindow.focus === 'function') {
+        skillPackageWindow.focus()
+      }
+    }
+  )
+
+  globalWindow.__skillsManagerSkillPackageWindow = skillPackageWindow
 }
 
 async function refreshSkills () {
@@ -634,7 +667,6 @@ watch([filteredSkills, currentView, isLoading], () => {
 
 watch(() => props.enterAction, () => {
   currentView.value = 'list'
-  activeSkillPackage.value = null
   window.utools.setExpendHeight(PAGE_HEIGHT)
 
   if (directoryConfigs.value.length > 0) {
@@ -1055,12 +1087,6 @@ onBeforeUnmount(() => {
         </section>
       </section>
 
-      <section v-else key="package" class="page-shell">
-        <SkillPackage
-          :skill-info="activeSkillPackage"
-          @back="closeSkillPackage"
-        />
-      </section>
     </Transition>
   </div>
 </template>

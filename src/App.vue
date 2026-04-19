@@ -1,78 +1,33 @@
 <script lang="ts" setup>
 import { computed, onMounted, ref } from 'vue'
 import SkillManager from './SkillManager/index.vue'
-
-let standaloneWindow: any = null
+import SkillPackage from './SkillPackage/index.vue'
+import { STORAGE_KEYS } from './storageKeys.js'
 
 const enterAction = ref({})
 const windowType = ref<'main' | 'detach' | 'browser'>('main')
-const delegatedToStandalone = ref(false)
+const activeSkillPackage = ref<any>(null)
 
-const shouldRenderEmbeddedApp = computed(() => {
-  return windowType.value !== 'main' || !delegatedToStandalone.value
+const shouldRenderSkillPackage = computed(() => {
+  return windowType.value === 'browser'
 })
 
-function canReuseStandaloneWindow () {
-  if (!standaloneWindow) return false
-
+function getStoredSkillPackage () {
   try {
-    if (typeof standaloneWindow.isDestroyed === 'function') {
-      return !standaloneWindow.isDestroyed()
-    }
+    const value = window.utools.dbStorage.getItem(STORAGE_KEYS.activeSkillPackage)
+    return value && typeof value === 'object' ? value : null
   } catch (error) {
-    return false
-  }
-
-  return true
-}
-
-function focusStandaloneWindow (targetWindow: any) {
-  if (!targetWindow) return
-
-  if (typeof targetWindow.show === 'function') {
-    targetWindow.show()
-  }
-
-  if (typeof targetWindow.focus === 'function') {
-    targetWindow.focus()
+    return null
   }
 }
 
-function openStandaloneWindow () {
-  delegatedToStandalone.value = true
+function closeSkillPackageWindow () {
+  window.close()
+}
 
-  if (canReuseStandaloneWindow()) {
-    focusStandaloneWindow(standaloneWindow)
-    window.utools.hideMainWindow(false)
-    return
-  }
-
-  const nextWindow = window.utools.createBrowserWindow(
-    'index.html',
-    {
-      show: false,
-      title: 'Skill Manager',
-      width: 900,
-      height: 750,
-      minWidth: 900,
-      minHeight: 750,
-      resizable: true,
-      minimizable: true,
-      maximizable: true,
-      center: true,
-      autoHideMenuBar: true,
-      closeable: true,
-      webPreferences: {
-        preload: 'preload/services.js'
-      }
-    },
-    () => {
-      focusStandaloneWindow(nextWindow)
-      window.utools.hideMainWindow(false)
-    }
-  )
-
-  standaloneWindow = nextWindow
+function syncBrowserWindowState () {
+  if (windowType.value !== 'browser') return
+  activeSkillPackage.value = getStoredSkillPackage()
 }
 
 onMounted(() => {
@@ -84,14 +39,17 @@ onMounted(() => {
 
   window.utools.onPluginEnter((action) => {
     enterAction.value = action
-
-    if (windowType.value === 'main') {
-      openStandaloneWindow()
-    }
   })
+
+  syncBrowserWindowState()
 })
 </script>
 
 <template>
-  <SkillManager v-if="shouldRenderEmbeddedApp" :enter-action="enterAction" />
+  <SkillPackage
+    v-if="shouldRenderSkillPackage"
+    :skill-info="activeSkillPackage"
+    @back="closeSkillPackageWindow"
+  />
+  <SkillManager v-else :enter-action="enterAction" />
 </template>
