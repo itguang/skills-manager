@@ -1,6 +1,7 @@
 const fs = require('node:fs')
 const os = require('node:os')
 const path = require('node:path')
+const skillPackageService = require('./skillPackageService.cjs')
 
 const ENABLED_SKILL_FILE = 'SKILL.md'
 const DISABLED_SKILL_FILE = 'SKILL.md.disabled'
@@ -406,5 +407,19 @@ window.services = {
 
     fs.rmSync(skillDirPath, { recursive: true, force: false })
     return true
+  },
+  listSkillPackageFiles ({ skillDirPath }) {
+    return skillPackageService.listSkillPackageFiles({ skillDirPath })
+  },
+  readSkillPackageFile ({ skillDirPath, filePath }) {
+    return skillPackageService.readSkillPackageFile({ skillDirPath, filePath })
+  },
+  writeSkillPackageFile ({ skillDirPath, filePath, content, expectedMtimeMs }) {
+    return skillPackageService.writeSkillPackageFile({
+      skillDirPath,
+      filePath,
+      content,
+      expectedMtimeMs
+    })
   }
 }

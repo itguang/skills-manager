@@ -3,6 +3,8 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Back, Delete, DocumentCopy, FolderOpened, PriceTag, Setting, Tickets, User, Collection } from '@element-plus/icons-vue'
 import { getSkillTags, getVisibleSkillTags } from './skillTagUtils.js'
+import { STORAGE_KEYS } from '../storageKeys.js'
+import SkillPackage from '../SkillPackage/index.vue'
 
 const props = defineProps({
   enterAction: {
@@ -10,11 +12,6 @@ const props = defineProps({
     default: () => ({})
   }
 })
-
-const STORAGE_KEYS = {
-  directories: 'skills-manager.directories',
-  projectRoot: 'skills-manager.projectRoot'
-}
 
 const PAGE_HEIGHT = 816
 const DESCRIPTION_PREVIEW_LINE_COUNT = 2
@@ -134,7 +131,7 @@ function mergeDirectoryConfigs (savedConfigs: any[]) {
   return mergedDefaults
 }
 
-const currentView = ref<'list' | 'settings'>('list')
+const currentView = ref<'list' | 'settings' | 'package'>('list')
 const projectRoot = ref('')
 const directoryConfigs = ref<any[]>([])
 const scannedDirectories = ref<any[]>([])
@@ -151,6 +148,7 @@ const expandedSkillDescriptionIds = ref<string[]>([])
 const overflowingSkillDescriptionIds = ref<string[]>([])
 const skillDescriptionMeasureElements = new Map<string, HTMLElement>()
 const homeDirectory = ref('')
+const activeSkillPackage = ref<any>(null)
 
 function persistSettings () {
   const normalizedProjectRoot = typeof projectRoot.value === 'string' ? projectRoot.value.trim() : ''
@@ -242,6 +240,29 @@ function copySkillName (skill: any) {
   } catch (error: any) {
     ElMessage.error(error?.message || '复制 skill 名称失败')
   }
+}
+
+function openSkillPackage (skill: any) {
+  const skillDirPath = typeof skill?.skillDirPath === 'string' ? skill.skillDirPath : ''
+  const skillName = typeof skill?.name === 'string' ? skill.name.trim() : ''
+
+  if (!skillDirPath || !skillName) {
+    showNotification('未找到可打开的技能包')
+    return
+  }
+
+  activeSkillPackage.value = {
+    skillId: skill.id,
+    skillName,
+    skillPath: skillDirPath
+  }
+  currentView.value = 'package'
+}
+
+async function closeSkillPackage () {
+  activeSkillPackage.value = null
+  currentView.value = 'list'
+  await refreshSkills()
 }
 
 async function refreshSkills () {
@@ -613,6 +634,7 @@ watch([filteredSkills, currentView, isLoading], () => {
 
 watch(() => props.enterAction, () => {
   currentView.value = 'list'
+  activeSkillPackage.value = null
   window.utools.setExpendHeight(PAGE_HEIGHT)
 
   if (directoryConfigs.value.length > 0) {
@@ -765,7 +787,14 @@ onBeforeUnmount(() => {
                               <el-icon><FolderOpened /></el-icon>
                             </el-button>
                             <div class="skill-title-leading">
-                              <span class="skill-name" :title="skill.name">{{ skill.name }}</span>
+                              <button
+                                class="skill-name-button"
+                                :title="`打开 ${skill.name}`"
+                                type="button"
+                                @click="openSkillPackage(skill)"
+                              >
+                                <span class="skill-name" :title="skill.name">{{ skill.name }}</span>
+                              </button>
                               <el-button
                                 class="skill-copy-button"
                                 :aria-label="`复制 ${skill.name}`"
@@ -896,7 +925,7 @@ onBeforeUnmount(() => {
         </section>
       </section>
 
-      <section v-else key="settings" class="page-shell">
+      <section v-else-if="currentView === 'settings'" key="settings" class="page-shell">
         <section class="settings-topbar panel-surface panel-animated">
           <button
             class="icon-action-button settings-back-button"
@@ -1024,6 +1053,13 @@ onBeforeUnmount(() => {
             </div>
           </el-scrollbar>
         </section>
+      </section>
+
+      <section v-else key="package" class="page-shell">
+        <SkillPackage
+          :skill-info="activeSkillPackage"
+          @back="closeSkillPackage"
+        />
       </section>
     </Transition>
   </div>
@@ -1517,7 +1553,30 @@ onBeforeUnmount(() => {
   white-space: nowrap;
   user-select: text;
   -webkit-user-select: text;
-  cursor: text;
+  cursor: pointer;
+}
+
+.skill-name-button {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--brand);
+  cursor: pointer;
+}
+
+.skill-name-button:hover,
+.skill-name-button:focus-visible {
+  color: var(--brand-strong);
+}
+
+.skill-name-button:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--brand) 24%, transparent);
+  outline-offset: 2px;
+  border-radius: 6px;
 }
 
 .skill-copy-button {
