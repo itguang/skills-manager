@@ -22,7 +22,7 @@ const props = defineProps({
   }
 })
 
-const PAGE_HEIGHT = 816
+const PAGE_HEIGHT = 750
 const SEARCH_PLACEHOLDER = '搜索 skill 名称、描述、标签'
 const RESCAN_DELAY_MS = 300
 // 入场动画只给首屏的行做错位延迟，避免长列表最后几行等太久才出现
