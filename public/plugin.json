@@ -11,7 +11,7 @@
   "features": [
     {
       "code": "skills-manager",
-      "explain": "查看本机 skill 列表，并在独立设置页配置扫描目录",
+      "explain": "管理本机 Agents / Claude Code / Codex / OpenCode / Cursor 等 agent 的 skills",
       "cmds": [
         "skills",
         "skill manager",

@@ -1,0 +1,43 @@
+/* 设置页各分区共用的排版，由 SettingsView 统一以全局样式引入一次 */
+.settings-section {
+  display: grid;
+  gap: 8px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+}
+
+.section-header {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.section-header h3 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.section-header p {
+  margin: 2px 0 0;
+  color: var(--text-faint);
+  font-size: 12px;
+}
+
+.section-empty {
+  margin: 0;
+  padding: 10px 0 2px;
+  color: var(--text-faint);
+  font-size: 12px;
+}
+
+.section-rows {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}

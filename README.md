@@ -22,12 +22,14 @@
 
 ## ✨ 特性
 
-- 🔍 **可视化浏览** - 直观的列表视图展示所有已安装的 Skills
-- ⚡️ **快速启动** - 支持多指令快速调用，提高工作效率
-- ⚙️ **灵活配置** - 自定义扫描目录路径，适应不同工作环境
-- 🎨 **现代化 UI** - 基于 Vue 3 构建的现代化用户界面
-- 🌓 **暗色模式** - 完美支持系统暗色模式切换
-- 📦 **轻量高效** - 基于 Vite 构建，启动迅速
+- 🧩 **遵循 Agent Skills 规范** - 用标准 YAML 解析 `SKILL.md`，自动标出不符合规范的 skill（name 格式、与目录名不一致、缺少 description 等）
+- 🤖 **多 Agent 支持** - 内置全局（Agent Skills 规范）、Claude Code、Codex、OpenCode、Cursor、Gemini CLI、GitHub Copilot 的全局 / 项目目录，也可添加自定义目录
+- 🔗 **软链接合并** - 同一个 skill 软链接到多个 agent 时合并为一条，显示它对哪些 agent 生效；可一键清理失效链接
+- 🔍 **顶栏搜索** - 直接在 uTools 输入框里搜索，按 agent 标签、状态、范围、分类筛选；↑↓ 选择、Enter 查看详情
+- ✏️ **插件内编辑** - Markdown 所见即所得编辑（可随时切到源码），frontmatter 用表单填写并实时校验规范；脚本等文件用带语法高亮的代码编辑器；⌘S 保存
+- 📁 **多项目切换** - 添加多个项目，在列表页切换查看各项目的项目级 skill
+- 🗑 **安全删除** - 实体目录移到废纸篓，软链接只解除链接
+- 🌓 **暗色模式** - 跟随系统
 
 ## 📸 截图
 
@@ -60,6 +62,7 @@ cd skills-manager
 
 ```bash
 npm install
+npm install --prefix public/preload
 ```
 
 3. **开发模式**
@@ -93,9 +96,23 @@ npm run build
 
 ### 核心功能
 
-1. **查看 Skills 列表** - 自动扫描并列出所有已安装的 Skills
-2. **配置扫描目录** - 在设置页面自定义 Skills 存储路径
-3. **详细信息展示** - 查看 Skill 的描述、版本等元信息
+1. **浏览与搜索** - 打开插件后直接在顶部输入框输入关键词；工具栏的 agent 标签切换来源，漏斗按钮打开更多筛选
+2. **启用 / 停用** - 行内开关会把 `SKILL.md` 重命名为 `SKILL.md.disabled`（反之亦然）；软链接共享的 skill 会对所有关联 agent 同时生效
+3. **详情** - 点击任意一行查看完整描述、frontmatter 字段、所有安装位置和 `SKILL.md` 原文
+4. **编辑** - 行内铅笔按钮、详情里的「编辑」或选中后按 ⌘E 进入编辑器：左侧是 skill 目录下的文件树，可新建文件；`.md` 默认所见即所得，frontmatter 中的注释和自定义字段会原样保留；文件在外部被修改时保存会提示冲突，离开时会提醒未保存的修改
+5. **目录配置** - 齿轮按钮进入：管理项目、开关各 agent、修改路径（支持 `~`、`${CODEX_HOME}` 等环境变量）、添加自定义目录，修改后自动保存并重新扫描
+
+### 内置 Agent 目录
+
+| Agent | 全局目录 | 项目目录 |
+|------|------|------|
+| 全局（Agent Skills 规范） | `~/.agents/skills` | `.agents/skills` |
+| Claude Code | `~/.claude/skills` | `.claude/skills` |
+| Codex | `${CODEX_HOME}/skills`（默认 `~/.codex/skills`） | `.codex/skills` |
+| OpenCode | `~/.config/opencode/skills` | `.opencode/skills` |
+| Cursor | `~/.cursor/skills` | `.cursor/skills` |
+| Gemini CLI | `~/.gemini/skills` | `.gemini/skills` |
+| GitHub Copilot | `~/.copilot/skills` | `.github/skills` |
 
 ## 🛠 技术栈
 
@@ -115,13 +132,14 @@ skills-manager/
 │   ├── plugin.json           # 插件配置文件
 │   ├── logo.png             # 插件图标
 │   └── preload/
-│       ├── package.json     # Preload 依赖配置
-│       └── services.js      # Node.js 预加载脚本
+│       ├── package.json     # Preload 依赖配置（yaml）
+│       ├── services.js      # 暴露 window.services
+│       └── lib/             # frontmatter 解析、规范校验、目录扫描
 ├── src/
 │   ├── main.js              # 应用入口文件
 │   ├── App.vue              # 根组件
 │   ├── main.css             # 全局样式文件
-│   └── */                   # 功能组件目录
+│   └── SkillManager/        # 列表页、设置页、详情抽屉等组件
 ├── dist/                    # 构建输出目录
 ├── imgs/                    # 项目截图资源
 ├── package.json             # 项目依赖配置

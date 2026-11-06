@@ -6,7 +6,7 @@ Skills Manager 是一个用于管理本地已安装 skills 的 uTools 插件，�
 
 ## 当前技术栈（已按仓库现状更新）
 
-以下信息基于当前代码仓库，更新时间：`2026-03-29`。
+以下信息基于当前代码仓库，更新时间：`2026-11-06`。
 
 ### 前端与构建
 
@@ -63,18 +63,29 @@ npm run build
 /public
   /plugin.json
   /preload
-    /package.json
-    /services.js
+    /package.json           # 依赖 yaml（解析 SKILL.md frontmatter）
+    /services.js            # 只负责把 lib 中的能力挂到 window.services
+    /lib
+      /frontmatter.js       # frontmatter 解析（纯函数，可直接用 node 测试）
+      /skill-spec.js        # Agent Skills 规范校验
+      /scanner.js           # 目录扫描：跟随软链接、按真实路径去重合并
 /src
   /main.js
-  /main.css
+  /main.css                 # 全局 token（含 --agent-* 颜色、暗色模式）
   /App.vue
-  /SkillManager/index.vue   # 当前主要功能页面
-  /Hello/index.vue          # 旧示例组件（当前入口未使用）
-  /Read/index.vue           # 旧示例组件（当前入口未使用）
-  /Write/index.vue          # 旧示例组件（当前入口未使用）
+  /types/services.d.ts      # window.services 类型
+  /SkillManager
+    /index.vue              # 列表页 + 设置页切换、uTools 子输入框搜索、扫描调度
+    /agents.ts              # 内置 agent 预设（全局 / 项目路径）
+    /useSettings.ts         # 配置读写（dbStorage: skills-manager.settings.v2）与旧配置迁移
+    /useSkillFilters.ts     # 列表筛选
+    /components/            # ListToolbar / SkillRow / SkillDetailDrawer / SettingsView 等
 /dist
 ```
+
+### 新增 agent
+
+只需在 `src/SkillManager/agents.ts` 的 `AGENT_PRESETS` 加一项，并在 `src/main.css` 中补 `--agent-<id>` 颜色（亮色与暗色各一）。老用户的配置会在加载时自动补上新 agent。
 
 ## 前端开发规范
 
